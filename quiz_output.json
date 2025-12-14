@@ -1,0 +1,59 @@
+{
+  "topic": "Python programming",
+  "proficiency_level": "Advanced",
+  "mcq_questions": [
+    {
+      "question": "What is the output of the following code? `x = 10\ndef modify_x():\n  global x\n  x = 20\nmodify_x()\nprint(x)`",
+      "options": [
+        "10",
+        "20",
+        "None",
+        "Error"
+      ],
+      "correct_answer": "20"
+    },
+    {
+      "question": "Which of the following is a valid way to create a decorator in Python?",
+      "options": [
+        "Using a class with `__call__` method",
+        "Using a function that returns a function",
+        "Both A and B",
+        "None of the above"
+      ],
+      "correct_answer": "Both A and B"
+    },
+    {
+      "question": "What does the `*args` and `**kwargs` syntax represent in a function definition?",
+      "options": [
+        "It allows a function to accept an arbitrary number of positional and keyword arguments, respectively.",
+        "It is used for defining default argument values.",
+        "It is used for type hinting.",
+        "It is a syntax error."
+      ],
+      "correct_answer": "It allows a function to accept an arbitrary number of positional and keyword arguments, respectively."
+    },
+    {
+      "question": "What is the purpose of `__slots__` in a Python class?",
+      "options": [
+        "To define instance attributes with default values.",
+        "To optimize memory usage by preventing the creation of `__dict__` for instances.",
+        "To create class-level variables.",
+        "To define a custom string representation for objects."
+      ],
+      "correct_answer": "To optimize memory usage by preventing the creation of `__dict__` for instances."
+    }
+  ],
+  "article_questions": [
+    {
+      "question": "Explain the concept of generators in Python and their advantages.",
+      "answer": "Generators are functions that return an iterator and are created using the `yield` keyword. They allow for lazy evaluation, generating values on the fly, which saves memory and improves performance for large datasets."
+    }
+  ],
+  "coding_questions": [
+    {
+      "question": "Write a Python function that takes a list of numbers and returns a new list containing only the even numbers.",
+      "code_snippet": "def get_even_numbers(numbers):\n    return [num for num in numbers if num % 2 == 0]",
+      "explanation": "This function uses a list comprehension to iterate through the input list `numbers`. For each `num` in the list, it checks if `num` is divisible by 2 (i.e., even) using the modulo operator (`%`). If the condition is true, the number is included in the new list that is returned."
+    }
+  ]
+}

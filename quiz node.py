@@ -33,15 +33,25 @@ if not api_key:
 # 2) Pydantic Schemas
 # ===============================================================
 class MCQ(BaseModel):
-    question: str
-    options: List[str]
-    correct_answer: str
+    question: str = Field(..., description="The multiple-choice question")
+    options: List[str] = Field(..., description="List of answer options")
+    correct_answer: str = Field(..., description="The correct answer from the options")
 
+class ArticleQuestion(BaseModel):
+    question: str = Field(..., description="The article question")
+    answer: str = Field(..., description="The article answer")
+
+class CodingQuestion(BaseModel):
+    question: str = Field(..., description="The coding question")
+    code_snippet: str = Field(..., description="The code snippet for the coding question")
+    explanation: str = Field(..., description="Explanation of the code snippet")
 
 class Quiz(BaseModel):
-    topic: str
-    proficiency_level: str
-    questions: List[MCQ]
+    topic: str = Field(..., description="The topic of the quiz")
+    proficiency_level: str = Field(..., description="The proficiency level of the quiz")
+    mcq_questions: List[MCQ] = Field(..., description="List of multiple-choice questions")
+    article_questions: List[ArticleQuestion] = Field(..., description="List of article questions")
+    coding_questions: List[CodingQuestion] = Field(..., description="List of coding questions")
 
 
 # ===============================================================
@@ -57,13 +67,15 @@ class MCQState(TypedDict):
 # 4) Prompt
 # ===============================================================
 PROMPT_TEMPLATE = """
-Search the web for exactly 5 multiple-choice questions about {topic}
+Search the web for exactly 5 multiple-choice questions and 2 article questions and 2 coding questions about {topic}
 with {proficiency} proficiency level.
 
 Rules:
 - Use web search
-- 4 options per question
+- 4 options per mcq question
 - One correct answer
+- Provide concise and short answers for article questions
+- Provide code snippets for coding questions
 """
 
 prompt = PromptTemplate(
@@ -91,8 +103,8 @@ checkpointer = InMemorySaver()
 agent = create_agent(
     model=model,
     system_prompt=(
-        "You are a web-search-only MCQ collecting tool. "
-        "Never use pretrained knowledge."
+        "You are a web-search-only questions collecting tool. "
+        "Never use your pretrained knowledge."
     ),
     checkpointer=checkpointer,
     response_format=ToolStrategy(Quiz)
@@ -110,7 +122,7 @@ def mcq_agent_node(state: MCQState) -> MCQState:
 
     response = agent.invoke(
         {"messages": [{"role": "user", "content": filled_prompt}]},
-        config={"thread_id": f"mcq-{state['topic']}"}
+        config={"thread_id": f"questions-{state['topic']}"}
     )
 
     return {
@@ -124,9 +136,9 @@ def mcq_agent_node(state: MCQState) -> MCQState:
 # ===============================================================
 builder = StateGraph(MCQState)
 
-builder.add_node("mcq_generator", mcq_agent_node)
-builder.set_entry_point("mcq_generator")
-builder.set_finish_point("mcq_generator")
+builder.add_node("questions_generator", mcq_agent_node)
+builder.set_entry_point("questions_generator")
+builder.set_finish_point("questions_generator")
 
 app = builder.compile()
 
@@ -137,8 +149,8 @@ app = builder.compile()
 if __name__ == "__main__":
 
     initial_state: MCQState = {
-        "topic": "Agentic Systems with LangGraph",
-        "proficiency": "Beginner",
+        "topic": "Python programming",
+        "proficiency": "Advanced",
         "quiz": None
     }
 
