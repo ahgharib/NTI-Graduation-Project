@@ -1,3 +1,3 @@
 Orchestrator
 Planner
-![Alt text for screen readers](path/to/image.png "Optional title for mouseover")
+![Alt text for screen readers](graph.png "Optional title for mouseover")
