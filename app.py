@@ -26,8 +26,7 @@ if "graph" not in st.session_state:
 # ---------------------------
 st.set_page_config(page_title="YouTube Search", page_icon="🎥", layout="wide")
 
-st.title("🎥 YouTube Search with Groq AI + LangGraph + Memory")
-st.markdown("*Powered by Groq for smart query refinement, YouTube Data API, and persistent memory*")
+st.title("🎥 YouTube Search with Groq AI")
 
 # Sidebar with information
 with st.sidebar:
@@ -158,15 +157,6 @@ if search_button:
                         st.image(video['thumbnail'], use_container_width=True)
                         st.markdown(f"**Channel:** {video['channel']}")
                         st.markdown(f"[🔗 Open in YouTube](https://www.youtube.com/watch?v={video['id']})")
-                        
-                        # Show transcript preview
-                        with st.expander("📝 Transcript Preview"):
-                            transcript = video.get('transcript', 'No transcript available')
-                            if 'not available' in transcript.lower():
-                                st.warning(transcript)
-                            else:
-                                st.write(transcript)
-                                st.caption("*Showing first 500 characters*")
                     
                     with st.expander("📝 Show description"):
                         st.write(video['description'])

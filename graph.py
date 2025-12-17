@@ -7,7 +7,6 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from typing import TypedDict, List, Dict, Annotated
 from operator import add
-from youtube_transcript_api import YouTubeTranscriptApi
 
 
 # ---------------------------
@@ -83,56 +82,6 @@ def refine_query_with_groq(state: GraphState) -> GraphState:
     return state
 
 # ---------------------------
-# Helper: Get video transcript
-# ---------------------------
-import os
-import requests
-
-def get_video_transcript(video_id: str) -> str:
-    """
-    Fetch YouTube transcript using SerpAPI.
-    Returns a formatted English transcript if available.
-    """
-    serp_api_key = os.getenv("SERPAPI_API_KEY")
-    if not serp_api_key:
-        return "Transcript not available: SERPAPI_API_KEY missing in .env"
-
-    url = "https://serpapi.com/search.json"
-    params = {
-        "engine": "youtube_transcripts",
-        "video_id": video_id,
-        "api_key": serp_api_key
-    }
-
-    try:
-        response = requests.get(url, params=params)
-        data = response.json()
-
-        # Check if transcript exists
-        transcripts = data.get("transcripts", [])
-        if not transcripts:
-            return "Transcript not available: SerpAPI returned no transcripts"
-
-        # Prefer English transcript
-        english = next((t for t in transcripts if t.get("language") == "English"), None)
-        transcript_data = english["transcript"] if english else transcripts[0]["transcript"]
-
-        # Build readable text
-        full_text = "\n".join([entry["text"] for entry in transcript_data])
-
-        # Limit to 500 chars for display
-        preview = full_text.strip()
-        if len(preview) > 500:
-            preview = preview[:500] + "..."
-
-        return preview
-
-    except Exception as e:
-        return f"Transcript not available: {e}"
-
-
-
-# ---------------------------
 # Node 3: Search YouTube
 # ---------------------------
 def search_youtube(state: GraphState) -> GraphState:
@@ -169,8 +118,7 @@ def search_youtube(state: GraphState) -> GraphState:
                 "title": item["snippet"]["title"],
                 "description": item["snippet"]["description"],
                 "thumbnail": item["snippet"]["thumbnails"]["medium"]["url"],
-                "channel": item["snippet"]["channelTitle"],
-                "transcript": get_video_transcript(video_id)
+                "channel": item["snippet"]["channelTitle"]
             }
             videos.append(video)
         
