@@ -67,11 +67,8 @@ if st.button("Explain Topic"):
     temperature=0.4
     )
 
-    # Display results
-    # st.subheader("📄 Web Search Results")
-    # st.text(search_results)
-
     st.subheader("📝 Explanation")
     # st.text(response.content)
     st.write(response.choices[0].message.content)
+
 
