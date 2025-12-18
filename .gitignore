@@ -1,0 +1,10 @@
+# Ignore all .log files
+*.log
+
+# Ignore the VSCode folder
+.vscode/
+
+# Ignore a specific file
+.env
+
+ignored_files/
