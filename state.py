@@ -1,11 +1,10 @@
+import json
 from typing import TypedDict, List, Optional, Dict, Any, Annotated
 from pydantic import BaseModel, Field
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
-import json
 
-
-# Pydantic models for structured output
+# --- EXISTING PYDANTIC MODELS (Task, Milestone, ProjectPlan, Quiz, etc.) REMAIN THE SAME ---
 class Task(BaseModel):
     description: str = Field(..., description="Detailed description of the task")
     difficulty: str = Field(..., description="Difficulty level: Easy, Medium, Hard, Expert")
@@ -44,14 +43,18 @@ class Quiz(BaseModel):
     article_questions: List[ArticleQuestion] = Field(..., description="List of article questions")
     coding_questions: List[CodingQuestion] = Field(..., description="List of coding questions")
 
-# 2. Update the main AgentState
+# --- UPDATED AGENT STATE ---
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     next: str
-    user_prompt: Optional[str]
+    user_prompt: str             # The original high-level request
+    task_instructions: str       # NEW: Specific instructions for the current node
+    memory: List[str]            # NEW: Accumulates findings (Search results, previous plans, etc.)
+    
     parsed_output: Optional[ProjectPlan]
-    quiz_output: Optional[Quiz]  # NEW FIELD
-    videos: Optional[List[Dict[str, Any]]]  # NEW FIELD
+    quiz_output: Optional[Quiz]
+    videos: Optional[List[Dict[str, Any]]]
+    
     validation_errors: List[str]
     is_valid: bool
     execution_log: List[Dict[str, Any]]
@@ -60,3 +63,13 @@ class AgentState(TypedDict):
     plan_summary: Optional[str]
     refinement_attempts: int
     last_node: str
+    max_attempts: int  # Maximum attempts per node
+    attempts_count: Dict[str, int]  # Count attempts per node
+    visited_nodes: List[str]  # Track visited nodes
+    is_stuck: bool  # Flag for stuck detection
+
+    saved_plan_file: Optional[str]  # Path to saved plan JSON
+    saved_videos_file: Optional[str]  # Path to saved videos JSON
+    plan_data: Optional[Dict[str, Any]]  # Complete plan data
+    videos_data: Optional[Dict[str, Any]]  # Complete videos data
+    search_query: Optional[str]  # For video searches

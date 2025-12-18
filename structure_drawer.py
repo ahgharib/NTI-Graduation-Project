@@ -7,7 +7,8 @@ from state import AgentState
 from orchestrator import Orchestrator
 from planning_agent import PlanningAgent
 from quiz_agent import QuizAgent
-from youtube_agent import YouTubeAgent  # Import the new agent
+from youtube_agent import YouTubeAgent
+from web_search_agent import WebSearchAgent  # Added WebSearchAgent
 from langchain_core.messages import HumanMessage
 from tools import PlanTools, ValidationTools, OrchestrationTools
 
@@ -19,14 +20,15 @@ class MultiAgentPlanner:
         self._build_graph()
     
     def _build_graph(self):
-        """Build the complete LangGraph workflow: Planner, Quiz, and YouTube Search."""
+        """Build the complete LangGraph workflow: Planner, Quiz, YouTube, and Web Search."""
         self.workflow = StateGraph(AgentState)
         
-        # 1. Add nodes
+        # 1. Add all nodes
         self.workflow.add_node("orchestrator", self.orchestrator.supervisor_node)
         self.workflow.add_node("planner", PlanningAgent.plan_node)
         self.workflow.add_node("quiz_generator", QuizAgent.quiz_node)
-        self.workflow.add_node("youtube_search", YouTubeAgent.youtube_node) # NEW NODE
+        self.workflow.add_node("youtube_search", YouTubeAgent.youtube_node)
+        self.workflow.add_node("web_search", WebSearchAgent.search_node)  # NEW NODE
         
         # 2. Set entry point
         self.workflow.set_entry_point("orchestrator")
@@ -38,100 +40,117 @@ class MultiAgentPlanner:
             {
                 "planner": "planner",
                 "quiz_generator": "quiz_generator",
-                "youtube_search": "youtube_search",  # NEW ROUTE
+                "youtube_search": "youtube_search",
+                "web_search": "web_search",  # NEW ROUTE
                 "END": END
             }
         )
         
-        # 4. Add return edges (Nodes -> Orchestrator)
+        # 4. Add return edges (All Nodes -> Orchestrator)
         self.workflow.add_edge("planner", "orchestrator")
         self.workflow.add_edge("quiz_generator", "orchestrator")
-        self.workflow.add_edge("youtube_search", "orchestrator") # NEW RETURN
+        self.workflow.add_edge("youtube_search", "orchestrator")
+        self.workflow.add_edge("web_search", "orchestrator")  # NEW RETURN
 
         self.app = self.workflow.compile()
-        print("✅ Graph compiled: Orchestrator <-> [Planner | Quiz | YouTube]")
+        print("✅ Graph compiled: Orchestrator <-> [Planner | Quiz | YouTube | WebSearch]")
 
 def generate_graph_visualization():
-    """Generates the graph.png and prints updated Mermaid code for the 4-node system."""
+    """Generates the graph.png with clean Mermaid syntax."""
     
     planner_sys = MultiAgentPlanner()
     app = planner_sys.app
     
-    node_descriptions = {
-        "orchestrator": (
-            "**Orchestrator** (Supervisor)<br>LLM: Llama3<br>Decision Logic:<br>1. Route to **Planner** (Roadmaps)"
-            "<br>2. Route to **Quiz** (Testing)<br>3. Route to **YouTube** (Visual Tutorials)"
-        ),
-        "planner": (
-            "**Planner Agent**<br>LLM: Gemini<br>Task: Generate/Refine Project Plans"
-        ),
-        "quiz_generator": (
-            "**Quiz Agent**<br>LLM: Llama3/Gemini<br>Task: Generate MCQs & Coding Challenges"
-        ),
-        "youtube_search": (
-            "**YouTube Search Agent**<br>Internal Pipeline:<br>1. **Groq Refine** (Query Optimization)"
-            "<br>2. **YouTube API** (Search)<br>3. **File Output** (JSON Links)"
-        ),
-        "__start__": "START: User Input",
-        "__end__": "END: Output Generated"
-    }
-
-    mermaid_code = app.get_graph().draw_mermaid()
+    # Basic Mermaid code - start with just the graph structure
+    mermaid_template = """graph TB
+    %% --- Main Nodes ---
+    start([User Request]):::start
+    orchestrator{{Orchestrator<br/>LLM: Llama3}}:::orchestrator
+    planner[Planning Agent<br/>LLM: Llama3<br/>Output: JSON roadmap]:::planner
+    quiz[Quiz Agent<br/>LLM: Llama3<br/>Output: JSON quiz]:::quiz
+    youtube[YouTube Agent<br/>APIs: Groq + YouTube]:::youtube
+    websearch[Web Search Agent<br/>APIs: Tavily + Groq]:::websearch
+    finish([Tasks Complete]):::finish
     
-    # Replacement logic for labels
-    detailed_mermaid_code = mermaid_code.replace(
-        "orchestrator[orchestrator]", f'orchestrator("{node_descriptions["orchestrator"]}")'
-    ).replace(
-        "planner[planner]", f'planner("{node_descriptions["planner"]}")'
-    ).replace(
-        "quiz_generator[quiz_generator]", f'quiz_generator("{node_descriptions["quiz_generator"]}")'
-    ).replace(
-        "youtube_search[youtube_search]", f'youtube_search("{node_descriptions["youtube_search"]}")'
-    ).replace(
-        "__start__[__start__]", f'__start__[{node_descriptions["__start__"]}]'
-    ).replace(
-        "__end__[__end__]", f'__end__[{node_descriptions["__end__"]}]'
-    )
-
-    # Adding Tooling Subgraph and Logic Labels
-    tools_section = (
-        "\n%% --- Conditional Routing and Tools ---\n"
-        "orchestrator -->|**Condition: planner**| planner\n"
-        "orchestrator -->|**Condition: quiz_generator**| quiz_generator\n"
-        "orchestrator -->|**Condition: youtube_search**| youtube_search\n"
-        "orchestrator -->|**Condition: END**| __end__\n"
-        "\nsubgraph shared_tools [Shared Resources]\n"
-        "     V[ValidationTools]:::tool\n"
-        "     P[PlanTools/Parser]:::tool\n"
-        "     Y[YouTube API / Groq]:::tool\n"
-        "end\n"
-        "planner -.-> P\n"
-        "quiz_generator -.-> P\n"
-        "youtube_search -.-> Y\n"
-        "orchestrator -.-> V\n"
-        "classDef tool fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000;\n"
-    )
+    %% --- Main Flow ---
+    start --> orchestrator
+    orchestrator -->|roadmap| planner
+    orchestrator -->|quiz| quiz
+    orchestrator -->|video| youtube
+    orchestrator -->|search| websearch
+    planner --> orchestrator
+    quiz --> orchestrator
+    youtube --> orchestrator
+    websearch --> orchestrator
+    orchestrator -->|done| finish
     
-    final_mermaid_code = detailed_mermaid_code + tools_section
-
-    print("\n--- Sending Updated Mermaid Code to Kroki.io ---")
+    %% --- Tools Subgraph ---
+    subgraph tools[Internal Tools]
+        plantools[PlanTools]:::tool
+        validation[ValidationTools]:::tool
+        orchestration[OrchestrationTools]:::tool
+    end
     
-    resp = requests.post(
-        "https://kroki.io/mermaid/png",
-        data=final_mermaid_code.encode("utf-8"),
-        headers={"Content-Type": "text/plain"}
-    )
+    %% --- APIs Subgraph ---
+    subgraph apis[External APIs]
+        groq[Groq API]:::api
+        youtube_api[YouTube API]:::api
+        tavily[Tavily Search]:::api
+    end
     
-    if resp.status_code == 200:
-        with open("graph.png", "wb") as f:
-            f.write(resp.content)
-        print("✅ Success! 'graph.png' updated with YouTube Search Node.")
-    else:
-        print(f"❌ Error: {resp.status_code}")
+    %% --- Tool Connections ---
+    planner -.-> plantools
+    orchestrator -.-> validation
+    orchestrator -.-> orchestration
+    youtube -.-> groq
+    youtube -.-> youtube_api
+    websearch -.-> tavily
+    websearch -.-> groq
+    
+    %% --- Styling ---
+    classDef orchestrator fill:#FFF3E0,stroke:#FF9800,stroke-width:3px
+    classDef planner fill:#E8F5E8,stroke:#4CAF50,stroke-width:2px
+    classDef quiz fill:#F3E5F5,stroke:#9C27B0,stroke-width:2px
+    classDef youtube fill:#E3F2FD,stroke:#2196F3,stroke-width:2px
+    classDef websearch fill:#FFF8E1,stroke:#FFC107,stroke-width:2px
+    classDef start fill:#E8EAF6,stroke:#3F51B5,stroke-width:2px
+    classDef finish fill:#FCE4EC,stroke:#E91E63,stroke-width:2px
+    classDef tool fill:#E0F2F1,stroke:#009688,stroke-width:2px
+    classDef api fill:#FFEBEE,stroke:#F44336,stroke-width:2px
+    """
+    
+    print("\n--- Generating Graph Visualization ---")
+    
+    try:
+        # First, save the Mermaid code for debugging
+        with open("graph_code.mmd", "w", encoding="utf-8") as f:
+            f.write(mermaid_template)
+        print("✅ Mermaid code saved to 'graph_code.mmd' for debugging")
+        
+        # Send to Kroki
+        resp = requests.post(
+            "https://kroki.io/mermaid/png",
+            data=mermaid_template.encode("utf-8"),
+            headers={"Content-Type": "text/plain"},
+            timeout=30
+        )
+        
+        if resp.status_code == 200:
+            with open("graph.png", "wb") as f:
+                f.write(resp.content)
+            print(f"✅ Graph generated successfully! Saved as 'graph.png'")
+            return True
+        else:
+            print(f"❌ Kroki API Error {resp.status_code}: {resp.text[:200]}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return False
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        # Import main logic if needed, otherwise just run visualizer
+        # Import main logic if needed
         from main import main as run_main
         run_main()
     else:
