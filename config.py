@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from typing import Optional, Dict, Any
+from pydantic import SecretStr
 
 load_dotenv()
 
@@ -15,6 +16,20 @@ class Config:
     # Ollama for orchestrator
     OLLAMA_MODEL = "llama3"
     OLLAMA_BASE_URL = "http://localhost:11434"
+
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+    @classmethod
+    def get_groq_llm(cls):
+        from langchain_groq import ChatGroq
+        if not cls.GROQ_API_KEY:
+            raise ValueError("GROQ_API_KEY not found")
+        
+        # Wrap the string in SecretStr() to satisfy the type checker
+        return ChatGroq(
+            model="llama-3.3-70b-versatile", 
+            api_key=SecretStr(cls.GROQ_API_KEY) 
+        )
     
     @classmethod
     def get_gemini_llm(cls) -> ChatGoogleGenerativeAI:
