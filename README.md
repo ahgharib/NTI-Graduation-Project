@@ -9,4 +9,6 @@
 * Explanation
 * Question Making
 
-![Alt text for screen readers](graph.png "Optional title for mouseover")
+![Alt text for screen readers](graph_1.png "Optional title for mouseover")
+![Alt text for screen readers](graph_2.png "Optional title for mouseover")
+![Alt text for screen readers](graph_3.png "Optional title for mouseover")
