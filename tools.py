@@ -1,10 +1,12 @@
 import json
+import os
+import re
+import requests
 from typing import Dict, Any, List, Tuple
 from datetime import datetime
-from state import ProjectPlan, Milestone, Task
-import re
-import os
+from state import ProjectPlan
 from langchain_core.messages import HumanMessage
+from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 
 # --- PLANNER TOOLS ---
@@ -198,3 +200,87 @@ class OrchestrationTools:
             error_msg = f"❌ Save failed during final step: {str(e)[:200]}"
             print(f"  Save error: {e}")
             return OrchestrationTools.send_user_message(error_msg)
+
+# --- SEARCH TOOLS ---
+
+from langchain_core.tools import tool
+from config import Config
+from langchain_groq import ChatGroq
+from pydantic import SecretStr
+
+@tool
+def web_search_tool(query: str) -> str:
+    """
+    Performs a web search using Tavily and summarizes the results.
+    Use this when you need current events, documentation, or study material text.
+    """
+    print(f"  🔎 [Tool] Web Searching for: {query}")
+    
+    try:
+        # Perform search with Tavily
+        tavily = TavilySearch(max_results=3)
+        results = tavily.invoke(query)
+        
+        # Summarize results with Groq
+        if Config.GROQ_API_KEY:
+            llm = ChatGroq(
+                model="llama-3.3-70b-versatile",
+                api_key=SecretStr(Config.GROQ_API_KEY)
+            )
+            summary = llm.invoke(f"Summarize these search results for the query '{query}': {results}")
+            return f"Web Search Results for '{query}':\n{summary.content}"
+        else:
+            return f"Web Search Results for '{query}':\n{results}"
+    except Exception as e:
+        return f"Error performing web search: {str(e)}"
+
+@tool
+def youtube_search_tool(query: str) -> str:
+    """
+    Searches YouTube for videos. 
+    Use this when the user asks for videos, visual tutorials, or lectures.
+    Returns a list of video titles and links.
+    """
+    print(f"  🎥 [Tool] YouTube Searching for: {query}")
+    
+    youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+    if not youtube_api_key:
+        return "Error: YOUTUBE_API_KEY not found."
+
+    try:
+        # Optimize query with Groq if available
+        if Config.GROQ_API_KEY:
+            llm = ChatGroq(
+                model="llama-3.3-70b-versatile",
+                api_key=SecretStr(Config.GROQ_API_KEY)
+            )
+            refined = llm.invoke(f"Create an optimized YouTube search query for: {query}. Return ONLY the query.")
+            search_query = refined.content.strip()
+        else:
+            search_query = query
+
+        # Search YouTube API
+        url = "https://www.googleapis.com/youtube/v3/search"
+        params = {
+            "part": "snippet",
+            "q": search_query,
+            "maxResults": 3,
+            "type": "video",
+            "key": youtube_api_key
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        items = response.json().get("items", [])
+        
+        results = []
+        for item in items:
+            title = item["snippet"]["title"]
+            video_id = item["id"]["videoId"]
+            link = f"https://www.youtube.com/watch?v={video_id}"
+            results.append(f"- Title: {title}\n  Link: {link}")
+            
+        return "\n".join(results) if results else "No videos found."
+        
+    except Exception as e:
+        return f"Error searching YouTube: {str(e)}"

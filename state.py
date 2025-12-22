@@ -3,6 +3,7 @@ from typing import TypedDict, List, Optional, Dict, Any, Annotated
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
+import operator # Add this import
 
 # --- EXISTING PYDANTIC MODELS (Task, Milestone, ProjectPlan, Quiz, etc.) REMAIN THE SAME ---
 class Task(BaseModel):
@@ -43,33 +44,37 @@ class Quiz(BaseModel):
     article_questions: List[ArticleQuestion] = Field(..., description="List of article questions")
     coding_questions: List[CodingQuestion] = Field(..., description="List of coding questions")
 
-# --- UPDATED AGENT STATE ---
 class AgentState(TypedDict):
+    # --- Standard LangGraph Fields ---
     messages: Annotated[List[BaseMessage], add_messages]
-    next: str
-    user_prompt: str             # The original high-level request
-    task_instructions: str       # NEW: Specific instructions for the current node
-    memory: List[str]            # NEW: Accumulates findings (Search results, previous plans, etc.)
     
-    parsed_output: Optional[ProjectPlan]
-    quiz_output: Optional[Quiz]
-    videos: Optional[List[Dict[str, Any]]]
+    # --- Input/Output ---
+    user_prompt: str             
+    final_output: Optional[str]  
     
+    # --- Orchestration / Scheduling Fields ---
+    plan_actions: List[str]      
+    plan_instructions: List[str] 
+    current_instruction: str     
+    next: str                    
+    
+    # --- Domain Specific Data ---
+    parsed_output: Optional[Any] 
+    quiz_output: Optional[Any]   
     validation_errors: List[str]
-    is_valid: bool
     execution_log: List[Dict[str, Any]]
-    final_output: Optional[str]
-    saved_file: Optional[str]
-    plan_summary: Optional[str]
-    refinement_attempts: int
-    last_node: str
-    max_attempts: int  # Maximum attempts per node
-    attempts_count: Dict[str, int]  # Count attempts per node
-    visited_nodes: List[str]  # Track visited nodes
-    is_stuck: bool  # Flag for stuck detection
+    
+    # --- TIERED MEMORY SYSTEM ---
+    # research_memory: Use operator.add so nodes can just return [new_info] 
+    # instead of the whole list.
+    research_memory: Annotated[List[str], operator.add]
 
-    saved_plan_file: Optional[str]  # Path to saved plan JSON
-    saved_videos_file: Optional[str]  # Path to saved videos JSON
-    plan_data: Optional[Dict[str, Any]]  # Complete plan data
-    videos_data: Optional[Dict[str, Any]]  # Complete videos data
-    search_query: Optional[str]  # For video searches
+    # NEW: raw_data_storage: Holds big chunks like OCR text or raw Tool JSONs
+    # This prevents your summaries from 'polluting' the source data.
+    raw_data_storage: Annotated[List[Dict[str, Any]], operator.add]
+
+    # Required by the new PlanningAgent
+    task_instructions: Optional[str]
+    refinement_attempts: int
+    saved_plan_file: Optional[str]
+    plan_data: Optional[Dict[str, Any]]
