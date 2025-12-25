@@ -2,11 +2,11 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from config import Config
-from state import AgentState
+from chat_state import AgentState # Changed import
 from log import universal_debug_log # Import the new logger
 
 
-NodeName = Literal["planner", "quiz_generator", "explain_node"]
+NodeName = Literal["quiz_generator", "explain_node", "END"]
 
 class OrchestratorPlan(BaseModel):
     """The plan containing the sequence of nodes and their instructions."""
@@ -21,16 +21,14 @@ class Orchestrator:
         node_name = "ORCHESTRATOR"
         user_input = state["user_prompt"]
         
-        # LOG FULL INPUT
-        universal_debug_log(node_name, "FULL_INPUT", {"user_prompt": user_input, "state": state})
-        print(f"\n🧠 [ORCHESTRATOR] Planning for: {user_input}")
+        milestone_context = state.get("selected_milestone_context", "No specific milestone selected.")
 
         system_prompt = """You are the Orchestrator for a Study Buddy AI.
         
         AVAILABLE WORKERS:
-        1. planner: Creates comprehensive study roadmaps/project plans. (Use for: "Make a plan", "roadmap", "curriculum")
-        2. quiz_generator: Creates quizzes (MCQ/Coding). (Use for: "Test me", "Quiz me")
-        3. explainer: Explain complex topics (use for: explain, search on , give me an explaination)
+        1. quiz_generator: Creates quizzes (MCQ/Coding). (Use for: "Test me", "Quiz me")
+        2. explainer: Explain complex topics (use for: explain, search on , give me an explaination)
+        3. END: terminate the Chat
 
         CAPABILITIES:
         - All workers have access to Web Search and YouTube Search tools. 
@@ -40,11 +38,6 @@ class Orchestrator:
         Break the user input into a linear sequence of steps.
         
         SCENARIOS:
-        Input: "Make a study plan for Python then give me a quiz."
-        Output:
-          actions: ["planner", "quiz_generator"]
-          instructions: ["Create a beginner Python study roadmap.", "Generate a Python quiz based on the roadmap."]
-
         Input: "Find videos about React hooks and explain them."
         Output:
           actions: ["explain_node"]
@@ -71,10 +64,20 @@ class Orchestrator:
           actions: ["quiz_generator", "quiz_generator", "quiz_generator"]
           instructions: ["Search and generate a quiz on Agentic AI", "Search and generate a quiz on Computer Vision", "Search and generate a quiz on NLP"]
 
+        Input: "Create a 12-week Agentic AI roadmap. Do NOT include 'planning' or 'roadmap creation' as tasks; assume this output IS the final actionable plan. Focus 100 percent on specific technical milestones (e.g., 'Mastering LangGraph', 'Implementing Tool-Use')."
+        Output:
+          actions: ["END"]
+          instructions: ["Sorry I cannot Do this Task"]
+        
+        Input: "Create a video About taking photos"
+        Output:
+          actions: ["END"]
+          instructions: ["Sorry I cannot Do this Task"]
 
         Notes:
           A task can be called multiple times If the Topics are different
           Know that each WORKERS has the ability to search the internet or video search
+          If the User Asks for something that is not within the CAPABILITIES of any Worker like asking to create a plan or make a video, ...... then: actions = ["END"]
         """
 
         structured_llm = self.llm.with_structured_output(OrchestratorPlan)

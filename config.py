@@ -7,6 +7,13 @@ from pydantic import SecretStr
 
 load_dotenv()
 
+# --- LANGSMITH SETUP ---
+# Ensure these are in your .env file:
+# LANGCHAIN_TRACING_V2=true
+# LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
+# LANGCHAIN_API_KEY="<your-api-key>"
+# LANGCHAIN_PROJECT="roadmap-agent"
+
 class Config:
     # Google Gemini
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -15,6 +22,8 @@ class Config:
     
     # Ollama for orchestrator
     OLLAMA_MODEL = "llama3"
+    OLLAMA_MODEL_2 = "qwen3-vl:30b"
+    OLLAMA_MODEL_3 = "llama3.2"
     OLLAMA_BASE_URL = "http://localhost:11434"
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -43,9 +52,9 @@ class Config:
         )
     
     @classmethod
-    def get_ollama_llm(cls) -> ChatOllama:
+    def get_ollama_llm(cls, models=OLLAMA_MODEL) -> ChatOllama:
         return ChatOllama(
-            model=cls.OLLAMA_MODEL,
+            model=models,
             base_url=cls.OLLAMA_BASE_URL,
             temperature=0.1
         )
