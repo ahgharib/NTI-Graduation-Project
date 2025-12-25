@@ -4,7 +4,21 @@
 # Ignore the VSCode folder
 .vscode/
 
+# Ignore Python cache files
+__pycache__/
+
 # Ignore a specific file
 .env
 
+# Ignore all files in the ignored_files directory
 ignored_files/
+
+# Ignore .json files in the home directory only
+*.json
+
+# Ignore .txt files in the home directory only
+*.txt
+
+RAG 1/
+
+vectorstore/
