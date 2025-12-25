@@ -19,6 +19,4 @@ ignored_files/
 # Ignore .txt files in the home directory only
 *.txt
 
-RAG 1/
-
-vectorstore/
+RAG/data/
