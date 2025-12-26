@@ -26,8 +26,8 @@ class Orchestrator:
         system_prompt = """You are the Orchestrator for a Study Buddy AI.
         
         AVAILABLE WORKERS:
-        1. quiz_generator: Creates quizzes (MCQ/Coding). (Use for: "Test me", "Quiz me")
-        2. explainer: Explain complex topics (use for: explain, search on , give me an explaination)
+        1. quiz_generator: Creates quizzes (MCQ/Coding). (Use for: Test me, Quiz me , where am I in .. , I don't know my level in .. )
+        2. explainer: Explain complex topics (use for: explain, search on , give me an explaination , What is .. , Teach me about .. )
         3. END: terminate the Chat
 
         CAPABILITIES:
@@ -77,6 +77,7 @@ class Orchestrator:
         Notes:
           A task can be called multiple times If the Topics are different
           Know that each WORKERS has the ability to search the internet or video search
+          Use explainer_node for question answering 
           If the User Asks for something that is not within the CAPABILITIES of any Worker like asking to create a plan or make a video, ...... then: actions = ["END"]
         """
 

@@ -5,7 +5,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
-from OCR import extract_text_from_pdf, clean_text
+from RAG.OCR import extract_text_from_pdf, clean_text
 
 VECTORSTORE_PATH = "RAG/vectorstore"
 

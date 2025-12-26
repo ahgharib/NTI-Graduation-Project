@@ -2,7 +2,7 @@ import os
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
 from langchain_ollama import ChatOllama
-from prompts import (
+from RAG.prompts import (
     EXPLAIN_PROMPT,
     SUMMARY_PROMPT,
     RETRIEVE_PROMPT
@@ -21,21 +21,23 @@ def load_vectorstore():
         allow_dangerous_deserialization=True
     )
 
-def run_rag(query: str, mode: str):
+def get_context_chunks(query: str, k: int = 3):
     vectorstore = load_vectorstore()
-
-    # 1. Retrieve relevant chunks
-    docs = vectorstore.similarity_search(query, k=3)
-    
-
+    docs = vectorstore.similarity_search(query, k=k)
     context = "\n\n".join(
         f"[File: {os.path.basename(doc.metadata.get('source', 'N/A'))} | "
         f"Page {doc.metadata.get('page', 'N/A')}] "
         f"{doc.page_content}"
         for doc in docs
     )
-    print("############################## Context ##############################:\n", context)
-    print('#' *70)
+    # print("############################## Context ##############################:\n", context)
+    # print('#' *70)
+    return context
+
+
+def run_rag(query: str, mode: str):
+    # 1. Retrieve context
+    context = get_context_chunks(query)
     
     # 2. Select prompt
     if mode == "explain":

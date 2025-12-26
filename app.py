@@ -4,7 +4,13 @@ from streamlit_agraph import agraph, Node, Edge, Config as AgConfig
 from graph import app_graph, editor_graph 
 from state import PlanState
 from chat_graph import study_buddy_graph 
+import os
+import tempfile
+from RAG.ingest import ingest_pdf
 
+
+UPLOAD_DIR = "RAG/data"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 st.set_page_config(layout="wide", page_title="AI Planner Agent")
 
 # --- SESSION STATE INITIALIZATION ---
@@ -188,11 +194,31 @@ with col1:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
 
-    input_col, web_col, yt_col = st.columns([0.8, 0.1, 0.1])
+    input_col, web_col, yt_col, doc_col = st.columns([0.7, 0.1, 0.1, 0.1])
     with web_col:
         st.button("🌐 WEB", use_container_width=True, help="Search the web")
     with yt_col:
         st.button("📺 YT", use_container_width=True, help="Search YouTube")
+    with doc_col:
+        uploaded_doc = st.file_uploader(
+            "📄",
+            type=["pdf"],
+            label_visibility="collapsed",
+            help="Upload a document to use as a reference"
+        )
+
+    if uploaded_doc is not None:
+        file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
+
+        with open(file_path, "wb") as f:
+            f.write(uploaded_doc.getbuffer())
+
+        try:
+            ingest_pdf(file_path)
+            st.toast(f"Document indexed: {uploaded_doc.name}", icon="✅")
+        except Exception as e:
+            st.error(f"Document ingestion failed: {e}")
+
     
     with input_col:
         user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
