@@ -7,6 +7,8 @@ from chat_graph import study_buddy_graph
 import os
 import tempfile
 from RAG.ingest import ingest_pdf
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import OllamaEmbeddings
 
 
 UPLOAD_DIR = "RAG/data"
@@ -24,6 +26,10 @@ if "clicked_node" not in st.session_state:
     st.session_state.clicked_node = None
 if "new_chat_input" not in st.session_state:
     st.session_state.new_chat_input = ""
+if "uploaded_docs" not in st.session_state:
+    st.session_state.uploaded_docs = {}
+if "vectorstore" not in st.session_state:
+    st.session_state.vectorstore = None
 
 def select_milestone(node_id):
     st.session_state.clicked_node = node_id
@@ -200,24 +206,36 @@ with col1:
     with yt_col:
         st.button("📺 YT", use_container_width=True, help="Search YouTube")
     with doc_col:
-        uploaded_doc = st.file_uploader(
+        uploaded_docs = st.file_uploader(
             "📄",
             type=["pdf"],
+            accept_multiple_files=True,
             label_visibility="collapsed",
-            help="Upload a document to use as a reference"
+            help="Upload a documents to use as a reference"
         )
+        if st.session_state.uploaded_docs:
+            for name in st.session_state.uploaded_docs:
+                st.caption(f"• {name}")
 
-    if uploaded_doc is not None:
-        file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
+    if uploaded_docs:
+        for uploaded_doc in uploaded_docs:
+            file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
 
-        with open(file_path, "wb") as f:
-            f.write(uploaded_doc.getbuffer())
+            # Skip if already uploaded this session
+            if uploaded_doc.name in st.session_state.uploaded_docs:
+                continue
 
-        try:
-            ingest_pdf(file_path)
-            st.toast(f"Document indexed: {uploaded_doc.name}", icon="✅")
-        except Exception as e:
-            st.error(f"Document ingestion failed: {e}")
+            with open(file_path, "wb") as f:
+                f.write(uploaded_doc.getbuffer())
+
+            try:
+                ingest_pdf(file_path)
+                st.session_state.uploaded_docs[uploaded_doc.name] = file_path
+                st.toast(f"Indexed: {uploaded_doc.name}", icon="✅")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to ingest {uploaded_doc.name}: {e}")
+
 
     
     with input_col:

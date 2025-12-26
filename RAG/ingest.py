@@ -1,5 +1,6 @@
 import os
 import logging
+import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -88,10 +89,14 @@ def ingest_pdf(file_path: str):
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
     # 5️⃣ Vector store (append-safe)
-    logger.info("Creating new vector store...")
-    vectorstore = FAISS.from_documents(chunks, embeddings)
+    if st.session_state.vectorstore is None:
+        st.session_state.vectorstore = FAISS.from_documents(chunks, embeddings)
+    else:
+        st.session_state.vectorstore.add_documents(chunks)
 
-    vectorstore.save_local(VECTORSTORE_PATH)
+        logger.info(f"Vectorstore now contains {st.session_state.vectorstore.index.ntotal} vectors")
+
+    st.session_state.vectorstore.save_local(VECTORSTORE_PATH)
     logger.info(f"Vector store saved at {VECTORSTORE_PATH}.")
 
     logger.info(f"Ingestion complete. Total chunks: {len(chunks)}")

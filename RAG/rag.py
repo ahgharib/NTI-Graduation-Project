@@ -1,4 +1,5 @@
 import os
+import streamlit as st
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
 from langchain_ollama import ChatOllama
@@ -21,8 +22,13 @@ def load_vectorstore():
         allow_dangerous_deserialization=True
     )
 
-def get_context_chunks(query: str, k: int = 3):
-    vectorstore = load_vectorstore()
+def get_context_chunks(query: str, k: int = 3):      ### vectorstore is now in st.session_state
+    # vectorstore = load_vectorstore()               ### it's not saved locally anymore
+    vectorstore = st.session_state.vectorstore
+    if vectorstore is None:
+        print("#" *70,"Vectorstore is not loaded.", "#" *70)
+        print("#-#" * 100)
+        return ""
     docs = vectorstore.similarity_search(query, k=k)
     context = "\n\n".join(
         f"[File: {os.path.basename(doc.metadata.get('source', 'N/A'))} | "

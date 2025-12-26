@@ -20,3 +20,5 @@ ignored_files/
 *.txt
 
 RAG/data/
+
+RAG/vectorstore/
