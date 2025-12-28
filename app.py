@@ -297,6 +297,12 @@ with col1:
                                 quiz_str += f"*(Answer: {q.correct_answer})*\n\n"
                             with chat_box: st.chat_message("ai").markdown(quiz_str)
                             st.session_state.chat_history.append({"role": "ai", "content": quiz_str})
+                    
+                    if "summarizer" in chunk:
+                        response_messages = chunk["summarizer"].get("messages", [])
+                        for msg in response_messages:
+                            with chat_box: st.chat_message("ai").write(msg.content)
+                            st.session_state.chat_history.append({"role": "ai", "content": msg.content})
             except Exception as e:
                 st.error(f"Pipeline Error: {str(e)}")
 
