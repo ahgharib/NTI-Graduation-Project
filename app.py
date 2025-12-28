@@ -29,7 +29,9 @@ if "new_chat_input" not in st.session_state:
 if "uploaded_docs" not in st.session_state:
     st.session_state.uploaded_docs = {}
 if "vectorstore" not in st.session_state:
-    st.session_state.vectorstore = None
+    st.session_state.vectorstore = None  # chunk summaries
+if "file_vectorstore" not in st.session_state:
+    st.session_state.file_vectorstore = None # file summaries
 
 def select_milestone(node_id):
     st.session_state.clicked_node = node_id

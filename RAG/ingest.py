@@ -6,6 +6,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
+from langchain_ollama import ChatOllama
+from langchain_core.messages import HumanMessage
+from RAG.prompts import CHUNK_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT
 from RAG.OCR import extract_text_from_pdf, clean_text
 
 VECTORSTORE_PATH = "RAG/vectorstore"
@@ -18,6 +21,12 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+# -------------------
+# LLM Setup
+# -------------------
+llm = ChatOllama(model="llama3.2:1b", temperature=0.0)
 
 # -------------------
 # PDF ingestion
@@ -85,22 +94,87 @@ def ingest_pdf(file_path: str):
 
 
     # 4️⃣ Embeddings
-    logger.info("Creating embeddings with Ollama...")
+
+    logger.info("Summarizing each chunk and embedding summaries...")
+
+    chunk_summary_documents = []
+    file_chunk_summaries = []
+
+    for idx, chunk in enumerate(chunks):
+        prompt = CHUNK_SUMMARY_PROMPT.format(content=chunk.page_content)
+
+        response = llm.invoke([HumanMessage(content=prompt)])
+        summary_text = response.content.strip()
+
+        # 🔍 DEBUG PRINT
+        print(f"\n[DEBUG] Chunk {idx+1} summary:\n{summary_text}\n")
+
+        file_chunk_summaries.append(summary_text)
+
+        chunk_summary_documents.append(
+            Document(
+                page_content=summary_text,
+                metadata={**chunk.metadata,
+                          "original_content": chunk.page_content}
+            )
+        )
+
+    logger.info("Storing chunk summary embeddings...")
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
     # 5️⃣ Vector store (append-safe)
     if st.session_state.vectorstore is None:
-        st.session_state.vectorstore = FAISS.from_documents(chunks, embeddings)
+        st.session_state.vectorstore = FAISS.from_documents(chunk_summary_documents, embeddings)
     else:
-        st.session_state.vectorstore.add_documents(chunks)
-
+        st.session_state.vectorstore.add_documents(chunk_summary_documents)
         logger.info(f"Vectorstore now contains {st.session_state.vectorstore.index.ntotal} vectors")
 
-    st.session_state.vectorstore.save_local(VECTORSTORE_PATH)
-    logger.info(f"Vector store saved at {VECTORSTORE_PATH}.")
+    logger.info(
+        f"Chunk-summary vectorstore size: "
+        f"{st.session_state.vectorstore.index.ntotal}")
+
+    # st.session_state.vectorstore.save_local(VECTORSTORE_PATH)
+    # logger.info(f"Vector store saved at {VECTORSTORE_PATH}.")
+
+
+    # 6️⃣ File-level summary
+    logger.info("Generating file-level summary...")
+    file_prompt = FILE_SUMMARY_PROMPT.format(summaries="\n".join(file_chunk_summaries))
+
+    file_response = llm.invoke([HumanMessage(content=file_prompt)])
+    file_summary_text = file_response.content.strip()
+
+    # 🔍 DEBUG PRINT
+    print(f"\n[DEBUG] File summary:\n{file_summary_text}\n")
+
+    file_summary_doc = Document(
+    page_content=file_summary_text,
+    metadata={
+        "source": file_path,
+        "type": "file_summary"
+    })
+
+    logger.info("Storing file summary embedding...")
+
+    if st.session_state.file_vectorstore is None:
+        st.session_state.file_vectorstore = FAISS.from_documents(
+            [file_summary_doc],
+            embeddings
+        )
+    else:
+        st.session_state.file_vectorstore.add_documents(
+            [file_summary_doc]
+        )
+
+    logger.info(
+        f"File vectorstore size: "
+        f"{st.session_state.file_vectorstore.index.ntotal}"
+    )
+
+
 
     logger.info(f"Ingestion complete. Total chunks: {len(chunks)}")
     return len(chunks)
 
 if __name__ == "__main__":
-    ingest_pdf("/home/sg/Desktop/Serag_Ehab_2 pages ocr.pdf")
+    ingest_pdf("/home/sg/Desktop/Serag_Ehab_2 pages.pdf")

@@ -33,7 +33,7 @@ def get_context_chunks(query: str, k: int = 3):      ### vectorstore is now in s
     context = "\n\n".join(
         f"[File: {os.path.basename(doc.metadata.get('source', 'N/A'))} | "
         f"Page {doc.metadata.get('page', 'N/A')}] "
-        f"{doc.page_content}"
+        f"{doc.metadata.get('original_content', doc.page_content)}"
         for doc in docs
     )
     # print("############################## Context ##############################:\n", context)
