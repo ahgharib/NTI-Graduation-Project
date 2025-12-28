@@ -5,7 +5,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-# --- EXISTING PYDANTIC MODELS REMAIN FOR DATA CONSISTENCY ---
+# --- EXISTING PYDANTIC MODELS REMAIN UNCHANGED ---
 class Task(BaseModel):
     description: str = Field(..., description="Detailed description of the task")
     difficulty: str = Field(..., description="Difficulty level: Easy, Medium, Hard, Expert")
@@ -63,6 +63,9 @@ class AgentState(TypedDict):
     refinement_attempts: int
     saved_plan_file: Optional[str]
     
-    # --- CHANGED: Context Passing ---
-    plan_data: Optional[Dict[str, Any]]  # The full roadmap JSON
-    selected_milestone_context: Optional[str] # Text description of the user's selected node
+    # --- Context Passing ---
+    plan_data: Optional[Dict[str, Any]] 
+    selected_milestone_context: Optional[str] 
+    
+    # --- CHANGED: Added Summary Field ---
+    conversation_summary: Optional[str] # Holds the LLM-summarized history

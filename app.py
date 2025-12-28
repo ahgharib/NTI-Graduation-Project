@@ -9,6 +9,7 @@ import tempfile
 from RAG.ingest import ingest_pdf
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OllamaEmbeddings
+from chat_tools import summarize_history # Import the new function
 
 
 UPLOAD_DIR = "RAG/data"
@@ -247,6 +248,11 @@ with col1:
             st.chat_message("user").write(user_input)
 
         with st.spinner("Assistant is working..."):
+            history_context = ""
+            if len(st.session_state.chat_history) > 1:
+                previous_turns = st.session_state.chat_history[:-1]
+                history_context = summarize_history(previous_turns)
+                
             initial_chat_state = {
                 "user_prompt": user_input,
                 "messages": [],
@@ -258,7 +264,8 @@ with col1:
                 "validation_errors": [],
                 "refinement_attempts": 0,
                 "plan_data": st.session_state.plan_json,
-                "selected_milestone_context": selected_ms_text
+                "selected_milestone_context": selected_ms_text,
+                "conversation_summary": history_context # <--- INJECT SUMMARY
             }
 
             try:
