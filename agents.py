@@ -64,7 +64,7 @@ IMPORTANT: Striclly follow this Format and  Ensure That You Only Output the Json
 llm_gen = Config.get_gemini_llm()
 llm_disc = Config.get_ollama_llm(Config.OLLAMA_MODEL_3)
 llm_edit = Config.get_groq_llm()
-llm_val = Config.get_groq_llm
+llm_val = Config.get_groq_llm()
 
 def generator_node(state):
     prompt = ChatPromptTemplate.from_template(GEN_PROMPT)

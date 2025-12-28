@@ -2,8 +2,8 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from config import Config
-from chat_state import AgentState # Changed import
-from log import universal_debug_log # Import the new logger
+from chat_state import AgentState 
+from log import universal_debug_log 
 
 
 NodeName = Literal["quiz_generator", "explain_node", "END"]
@@ -21,6 +21,8 @@ class Orchestrator:
         node_name = "ORCHESTRATOR"
         user_input = state["user_prompt"]
         
+        # --- CHANGED: Use Summary instead of raw history ---
+        history_summary = state.get("conversation_summary", "No previous context.")
         milestone_context = state.get("selected_milestone_context", "No specific milestone selected.")
 
         system_prompt = """You are the Orchestrator for a Study Buddy AI.
@@ -36,6 +38,16 @@ class Orchestrator:
         
         YOUR TASK:
         Break the user input into a linear sequence of steps.
+        
+        CONTEXT (SUMMARIZED):
+        Use this summary to understand what the user has already learned or asked for. 
+        If the user says "more" or "quiz me on that", refer to the "Last Interaction" in this summary.
+        ------------------------------------------------
+        {history_summary}
+        ------------------------------------------------
+        
+        CURRENT USER REQUEST:
+        {input}
         
         SCENARIOS:
         Input: "Find videos about React hooks and explain them."
@@ -79,6 +91,7 @@ class Orchestrator:
           Know that each WORKERS has the ability to search the internet or video search
           Use explainer_node for question answering 
           If the User Asks for something that is not within the CAPABILITIES of any Worker like asking to create a plan or make a video, ...... then: actions = ["END"]
+          the User might select a specific milestone in his roadmap i want you to put the milestone in your instructions for each worker {milestone_context}
         """
 
         structured_llm = self.llm.with_structured_output(OrchestratorPlan)
@@ -88,7 +101,11 @@ class Orchestrator:
         ])
         
         chain = prompt | structured_llm
-        plan: OrchestratorPlan = chain.invoke({"input": user_input})
+        plan: OrchestratorPlan = chain.invoke({
+            "input": user_input,
+            "history_summary": history_summary, # Pass the summary
+            "milestone_context": milestone_context
+        })
         
         universal_debug_log(node_name, "PLAN_GENERATED", plan.dict())
         
@@ -97,5 +114,5 @@ class Orchestrator:
         return {
             "plan_actions": plan.actions,
             "plan_instructions": plan.instructions,
-            "next": "scheduler" # Hand off to the scheduler
+            "next": "scheduler" 
         }

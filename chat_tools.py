@@ -7,10 +7,69 @@ from datetime import datetime
 from chat_state import ProjectPlan
 from langchain_core.messages import HumanMessage
 from langchain_tavily import TavilySearch
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
+from langchain_core.tools import tool
+from config import Config
+from langchain_groq import ChatGroq
 
-# --- PLANNER TOOLS ---
+# --- HISTORY SUMMARIZER ---
 
+def summarize_history(chat_history: List[Dict[str, str]]) -> str:
+    """
+    Summarizes the chat history using an LLM.
+    Focuses on: 
+    1. High-level summary of older turns.
+    2. Detailed summary of the most recent interaction.
+    """
+    if not chat_history:
+        return "No previous conversation history."
+
+    # Convert list of dicts to a string format
+    history_text = ""
+    for msg in chat_history:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        history_text += f"{role}: {msg['content']}\n"
+
+    try:
+        # We use Groq for speed
+        llm = Config.get_ollama_llm()
+            
+        prompt = f"""
+        You are a summarization assistant for an AI Orchestrator.
+        
+        INPUT:
+        The following is a raw chat history between a User and a Study Buddy AI.
+        
+        YOUR TASK:
+        Create a concise summary of the conversation to help the Orchestrator understand context.
+        
+        STRUCTURE OF SUMMARY:
+        1. **Overall Context**: Briefly list the main topics discussed so far (e.g., "User learned about React hooks, then asked for a quiz on Python").
+        2. **Last Interaction**: Provide a specific summary of the VERY LAST turn (the last User prompt and the last AI response). Detail exactly what was explained or quizzed.
+        
+        RESTRICTIONS:
+        - Do NOT include raw tool outputs, HTML, or code blocks.
+        - Do NOT include "System" internal logs.
+        - Keep it under 200 words.
+        
+        RAW HISTORY:
+        {history_text}
+        """
+            
+        response = llm.invoke(prompt)
+        return response.content
+            
+    except Exception as e:
+        try:
+            # Fallback if no Groq key
+            return "History summary unavailable (Missing Groq Key). Raw: " + history_text[:500] + "..."
+        except Exception as e:
+            print(f"Summarization failed: {e}")
+            return "History summary unavailable due to error."
+
+
+# --- EXISTING TOOLS (PlanTools, ValidationTools, etc.) REMAIN UNCHANGED ---
+# (Keep the rest of your chat_tools.py content here: PlanTools, ValidationTools, OrchestrationTools, web_search_tool, youtube_search_tool)
 class PlanTools:
     """Tools for handling project plans (parsing, logging, formatting)."""
     
@@ -200,13 +259,6 @@ class OrchestrationTools:
             error_msg = f"❌ Save failed during final step: {str(e)[:200]}"
             print(f"  Save error: {e}")
             return OrchestrationTools.send_user_message(error_msg)
-
-# --- SEARCH TOOLS ---
-
-from langchain_core.tools import tool
-from config import Config
-from langchain_groq import ChatGroq
-from pydantic import SecretStr
 
 @tool
 def web_search_tool(query: str) -> str:
