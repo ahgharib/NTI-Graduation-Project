@@ -222,7 +222,8 @@ with col1:
         config = AgConfig(
             width=700, 
             height=400, 
-            directed=True, 
+            directed=True,
+            physics=False, 
             nodeHighlightBehavior=True,
             highlightColor="blue"
         )
