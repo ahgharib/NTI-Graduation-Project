@@ -2,11 +2,11 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from config import Config
-from chat_state import AgentState # Changed import
-from log import universal_debug_log # Import the new logger
+from chat_state import AgentState 
+from log import universal_debug_log 
 
-
-NodeName = Literal["quiz_generator", "explain_node", "END"]
+# --- UPDATED: Added "summarizer" to valid nodes ---
+NodeName = Literal["quiz_generator", "explain_node", "summarizer", "END"]
 
 class OrchestratorPlan(BaseModel):
     """The plan containing the sequence of nodes and their instructions."""
@@ -21,64 +21,51 @@ class Orchestrator:
         node_name = "ORCHESTRATOR"
         user_input = state["user_prompt"]
         
+        history_summary = state.get("conversation_summary", "No previous context.")
         milestone_context = state.get("selected_milestone_context", "No specific milestone selected.")
 
         system_prompt = """You are the Orchestrator for a Study Buddy AI.
         
         AVAILABLE WORKERS:
-        1. quiz_generator: Creates quizzes (MCQ/Coding). (Use for: Test me, Quiz me , where am I in .. , I don't know my level in .. )
-        2. explainer: Explain complex topics (use for: explain, search on , give me an explaination , What is .. , Teach me about .. )
-        3. END: terminate the Chat
+        1. quiz_generator: Creates quizzes (MCQ/Coding). (Use for: Test me, Quiz me, where am I in..)
+        2. explain_node: Explain complex topics (use for: explain, search on, What is.., Teach me about..)
+        3. summarizer: Summarize content or documents. (Use for: summarize this, give me an overview, simplify this paragraph, summarize page X)
+        4. END: Terminate the Chat.
 
-        CAPABILITIES:
-        - All workers have access to Web Search and YouTube Search tools. 
-        - DO NOT create a separate "search" node. Assign the research task to the relevant worker in your instructions for that worker.
-        
-        YOUR TASK:
-        Break the user input into a linear sequence of steps.
-        
+        CAPABILITIES & CONSTRAINTS:
+        - 'quiz_generator' and 'explain_node' have Web Search access.
+        - 'summarizer' relies ONLY on Document Context (RAG) and the text YOU provide in the instruction.
+        - IMPORTANT: Workers are STATELESS. They cannot see the chat history. 
+        - RULE: If a user request is dependent on previous context (e.g., "Summarize that", "Quiz me on the topic we discussed"), you MUST extract the relevant details from the 'CONTEXT (SUMMARIZED)' section and include them explicitly in the worker's instruction.
+
+        CONTEXT (SUMMARIZED FROM HISTORY):
+        ------------------------------------------------
+        {history_summary}
+        ------------------------------------------------
+
+        CURRENT USER REQUEST:
+        {input}
+
         SCENARIOS:
-        Input: "Find videos about React hooks and explain them."
+        Input: "Summarize your last response."
         Output:
-          actions: ["explain_node"]
-          instructions: ["Search for videos on React hooks and explain the core concepts found."]
+          actions: ["summarizer"]
+          instructions: ["Summarize the following information discussed previously: [Orchestrator: Insert the key points of the last assistant message here from history_summary]"]
 
-        Input: "Find NLP interview questions and make a quiz about them."
+        Input: "Quiz me on what we just talked about."
         Output:
-          actions: ["quiz"]
-          instructions: ["Search for NLP interview questions and make me a quiz from the gained information."]
+          actions: ["quiz_generator"]
+          instructions: ["Generate a quiz based on the topic of [Topic Name], specifically focusing on [Key Details from context]."]
 
-        
-        Input: "Research Quantum Physics and make a quiz about it."
+        Input: "Explain recursion then summarize it."
         Output:
-          actions: ["explain_node", "quiz_generator"]
-          instructions: ["Research the basics of Quantum Physics using web search.", "Create a quiz based on the Quantum Physics research."]
-        
-        Input: "explain recursion, explain dynamic programming, exlpain basic data structure concepts."
-        Output:
-          actions: ["explain_node", "explain_node", "explain_node"]
-          instructions: ["Explain  recursion", "Explain dynamic programming", "Explain data structure concepts"]
-
-        Input: "make a 3 quizez one on Agentic AI, another on Computer Vision, another on NLP. Note Use the Web (Internet) search to find information on each task before making the quiz"
-        Output:
-          actions: ["quiz_generator", "quiz_generator", "quiz_generator"]
-          instructions: ["Search and generate a quiz on Agentic AI", "Search and generate a quiz on Computer Vision", "Search and generate a quiz on NLP"]
-
-        Input: "Create a 12-week Agentic AI roadmap. Do NOT include 'planning' or 'roadmap creation' as tasks; assume this output IS the final actionable plan. Focus 100 percent on specific technical milestones (e.g., 'Mastering LangGraph', 'Implementing Tool-Use')."
-        Output:
-          actions: ["END"]
-          instructions: ["Sorry I cannot Do this Task"]
-        
-        Input: "Create a video About taking photos"
-        Output:
-          actions: ["END"]
-          instructions: ["Sorry I cannot Do this Task"]
+          actions: ["explain_node", "summarizer"]
+          instructions: ["Explain the programming concept of recursion with examples.", "Summarize the explanation of recursion provided in the previous step."]
 
         Notes:
-          A task can be called multiple times If the Topics are different
-          Know that each WORKERS has the ability to search the internet or video search
-          Use explainer_node for question answering 
-          If the User Asks for something that is not within the CAPABILITIES of any Worker like asking to create a plan or make a video, ...... then: actions = ["END"]
+          - You act as the memory for the workers. If the worker needs to know 'what' to summarize or 'what' to quiz, tell them exactly in the instruction.
+          - For document-specific requests (e.g., "Page 5"), specify the source so RAG can trigger.
+          - Always include the Milestone context if applicable: {milestone_context}
         """
 
         structured_llm = self.llm.with_structured_output(OrchestratorPlan)
@@ -88,7 +75,11 @@ class Orchestrator:
         ])
         
         chain = prompt | structured_llm
-        plan: OrchestratorPlan = chain.invoke({"input": user_input})
+        plan: OrchestratorPlan = chain.invoke({
+            "input": user_input,
+            "history_summary": history_summary,
+            "milestone_context": milestone_context
+        })
         
         universal_debug_log(node_name, "PLAN_GENERATED", plan.dict())
         
@@ -97,5 +88,5 @@ class Orchestrator:
         return {
             "plan_actions": plan.actions,
             "plan_instructions": plan.instructions,
-            "next": "scheduler" # Hand off to the scheduler
+            "next": "scheduler" 
         }

@@ -22,3 +22,4 @@ search_results.txt
 RAG/data/
 
 RAG/vectorstore/
+faiss

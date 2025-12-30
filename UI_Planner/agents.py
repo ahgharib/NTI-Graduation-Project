@@ -59,11 +59,11 @@ TASK: Update the plan based on the user's request (status change or structure ch
 """
 
 # --- AGENTS ---
-llm_gen = Config.get_gemini_llm()
+llm_gen = Config.get_groq_llm()
 llm_disc = Config.get_groq_llm()
 # llm_edit = Config.get_ollama_llm(Config.OLLAMA_MODEL_2)
-llm_edit = Config.get_gemini_llm()
-llm_val = Config.get_ollama_llm()
+llm_edit = Config.get_groq_llm()
+llm_val = Config.get_groq_llm()
 
 def generator_node(state):
     prompt = ChatPromptTemplate.from_template(GEN_PROMPT)

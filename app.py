@@ -9,7 +9,8 @@ import tempfile
 from RAG.ingest import ingest_pdf
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OllamaEmbeddings
-
+from chat_tools import summarize_history
+from search_agent import search_with_agent  # Import the search agent
 
 UPLOAD_DIR = "RAG/data"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -32,9 +33,57 @@ if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None  # chunk summaries
 if "file_vectorstore" not in st.session_state:
     st.session_state.file_vectorstore = None # file summaries
+    st.session_state.vectorstore = None
+if "search_query" not in st.session_state:
+    st.session_state.search_query = ""
+if "is_searching" not in st.session_state:
+    st.session_state.is_searching = False
 
 def select_milestone(node_id):
     st.session_state.clicked_node = node_id
+
+def perform_search():
+    """Execute search and update chat history."""
+    if st.session_state.search_query.strip():
+        # Get the context from selected milestone
+        context = ""
+        if st.session_state.clicked_node and st.session_state.plan_json:
+            ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
+                          if m.get("id") == st.session_state.clicked_node), None)
+            if ms_data:
+                context = ms_data['title']
+        
+        # Add user message to chat history
+        user_message = f"🔍 Search: {st.session_state.search_query}"
+        st.session_state.chat_history.append({"role": "user", "content": user_message})
+        
+        # Set searching flag
+        st.session_state.is_searching = True
+        
+        # Perform the search
+        try:
+            with st.spinner("Searching web and YouTube..."):
+                search_result = search_with_agent(
+                    query=st.session_state.search_query,
+                    context=context
+                )
+            
+            # Add search result to chat history
+            st.session_state.chat_history.append({
+                "role": "ai", 
+                "content": search_result
+            })
+            
+        except Exception as e:
+            error_msg = f"Search failed: {str(e)}"
+            st.session_state.chat_history.append({"role": "ai", "content": error_msg})
+        
+        # Reset search state
+        st.session_state.is_searching = False
+        st.session_state.search_query = ""
+        
+        # Rerun to update UI
+        st.rerun()
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -176,7 +225,8 @@ with col1:
         config = AgConfig(
             width=700, 
             height=400, 
-            directed=True, 
+            directed=True,
+            physics=False, 
             nodeHighlightBehavior=True,
             highlightColor="blue"
         )
@@ -191,7 +241,8 @@ with col1:
     
     selected_ms_text = ""
     if st.session_state.plan_json and st.session_state.clicked_node:
-        ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
+        ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
+                       if m.get("id") == st.session_state.clicked_node), None)
         if ms_data:
             st.info(f"Focused on: **{ms_data['title']}**")
             selected_ms_text = f"Title: {ms_data['title']}. Description: {ms_data['description']}."
@@ -201,19 +252,53 @@ with col1:
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
                 st.write(msg["content"])
+        
+        # Show loading animation when searching
+        if st.session_state.is_searching:
+            with st.chat_message("assistant"):
+                st.markdown(
+                    """
+                    <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
+                        <img src="https://i.gifer.com/ZKZg.gif" width="60" />
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
 
-    input_col, web_col, yt_col, doc_col = st.columns([0.7, 0.1, 0.1, 0.1])
+    # UPDATED: Search input and buttons layout
+    search_col, web_col, yt_col, doc_col = st.columns([0.7, 0.1, 0.1, 0.1])
+    
+    with search_col:
+        # Search input that triggers on Enter
+        search_query = st.text_input(
+            "Search query...",
+            value=st.session_state.search_query,
+            key="search_input",
+            on_change=perform_search,
+            label_visibility="collapsed",
+            placeholder="Search the web and YouTube..."
+        )
+        if search_query:
+            st.session_state.search_query = search_query
+    
     with web_col:
-        st.button("🌐 WEB", use_container_width=True, help="Search the web")
+        # Search button
+        if st.button("🔍", use_container_width=True, help="Search the web and YouTube"):
+            if st.session_state.search_query:
+                perform_search()
+            else:
+                st.warning("Please enter a search query first")
+    
     with yt_col:
-        st.button("📺 YT", use_container_width=True, help="Search YouTube")
+        st.button("📺", use_container_width=True, help="Direct YouTube search (coming soon)")
+    
     with doc_col:
         uploaded_docs = st.file_uploader(
             "📄",
             type=["pdf"],
             accept_multiple_files=True,
             label_visibility="collapsed",
-            help="Upload a documents to use as a reference"
+            help="Upload documents to use as reference"
         )
         if st.session_state.uploaded_docs:
             for name in st.session_state.uploaded_docs:
@@ -238,10 +323,8 @@ with col1:
             except Exception as e:
                 st.error(f"Failed to ingest {uploaded_doc.name}: {e}")
 
-
-    
-    with input_col:
-        user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
+    # Regular chat input (separate from search)
+    user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
 
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -249,6 +332,11 @@ with col1:
             st.chat_message("user").write(user_input)
 
         with st.spinner("Assistant is working..."):
+            history_context = ""
+            if len(st.session_state.chat_history) > 1:
+                previous_turns = st.session_state.chat_history[:-1]
+                history_context = summarize_history(previous_turns)
+                
             initial_chat_state = {
                 "user_prompt": user_input,
                 "messages": [],
@@ -260,7 +348,8 @@ with col1:
                 "validation_errors": [],
                 "refinement_attempts": 0,
                 "plan_data": st.session_state.plan_json,
-                "selected_milestone_context": selected_ms_text
+                "selected_milestone_context": selected_ms_text,
+                "conversation_summary": history_context
             }
 
             try:
@@ -292,6 +381,12 @@ with col1:
                                 quiz_str += f"*(Answer: {q.correct_answer})*\n\n"
                             with chat_box: st.chat_message("ai").markdown(quiz_str)
                             st.session_state.chat_history.append({"role": "ai", "content": quiz_str})
+                    
+                    if "summarizer" in chunk:
+                        response_messages = chunk["summarizer"].get("messages", [])
+                        for msg in response_messages:
+                            with chat_box: st.chat_message("ai").write(msg.content)
+                            st.session_state.chat_history.append({"role": "ai", "content": msg.content})
             except Exception as e:
                 st.error(f"Pipeline Error: {str(e)}")
 
@@ -324,7 +419,8 @@ with col2:
 
     st.subheader("📝 Milestone Details")
     if st.session_state.clicked_node and st.session_state.plan_json:
-        ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
+        ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
+                       if m.get("id") == st.session_state.clicked_node), None)
         if ms_data:
             st.markdown(f"### {ms_data['title']}")
             st.caption(f"Status: {ms_data['status'].upper()}")

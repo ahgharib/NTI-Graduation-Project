@@ -1,4 +1,3 @@
-# agents.py
 import json
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -56,15 +55,14 @@ Selected Node: {selected_node}
 
 TASK: Update the plan based on the user's request (status change or structure change).
 {format_instructions}
-IMPORTANT: Striclly follow this Format and  Ensure That You Only Output the Json file No Extra text or '''json''' or any thing before or after the json file No "OK here is Your correct Json file" or "Here is the corrected JSON structure:", Your Output will go to a PydanticOutputParser and it will check the Foramt structure and it will fail if you do not get the right strucutre
 """
-# IMPORTANT: Ensure That You Only Output the Json file No Extra text or '''json''' or any thing before or after the json file No "OK here is Your correct Json file"
 
 # --- AGENTS ---
+# Switched to Groq as per modified optimization logic
 llm_gen = Config.get_gemini_llm()
-llm_disc = Config.get_ollama_llm(Config.OLLAMA_MODEL_3)
+llm_disc = Config.get_groq_llm()
 llm_edit = Config.get_groq_llm()
-llm_val = Config.get_groq_llm
+llm_val = Config.get_groq_llm()
 
 def generator_node(state):
     prompt = ChatPromptTemplate.from_template(GEN_PROMPT)
