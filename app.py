@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+import uuid
 from streamlit_agraph import agraph, Node, Edge, Config as AgConfig
 from graph import app_graph, editor_graph 
 from state import PlanState
@@ -300,28 +301,43 @@ with col1:
             label_visibility="collapsed",
             help="Upload documents to use as reference"
         )
-        if st.session_state.uploaded_docs:
-            for name in st.session_state.uploaded_docs:
-                st.caption(f"• {name}")
+        # if st.session_state.uploaded_docs:
+        #     for name in st.session_state.uploaded_docs:
+        #         st.caption(f"• {name}")
 
     if uploaded_docs:
         for uploaded_doc in uploaded_docs:
-            file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
 
-            # Skip if already uploaded this session
             if uploaded_doc.name in st.session_state.uploaded_docs:
-                continue
+                continue  # already uploaded this session
+
+            file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
 
             with open(file_path, "wb") as f:
                 f.write(uploaded_doc.getbuffer())
+            
+            st.session_state.uploaded_docs[uploaded_doc.name] = file_path
 
-            try:
-                ingest_pdf(file_path)
-                st.session_state.uploaded_docs[uploaded_doc.name] = file_path
-                st.toast(f"Indexed: {uploaded_doc.name}", icon="✅")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Failed to ingest {uploaded_doc.name}: {e}")
+    if st.button("📚 Index Documents"):
+        embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
+        chunk_docs = []
+        file_docs = []
+
+        for path in st.session_state.uploaded_docs.values():
+            chunks, file_summary = ingest_pdf(path)
+            chunk_docs.extend(chunks)
+            file_docs.append(file_summary)
+
+        st.session_state.vectorstore = FAISS.from_documents(
+            chunk_docs, embeddings
+        )
+
+        st.session_state.file_vectorstore = FAISS.from_documents(
+            file_docs, embeddings
+        )
+
+        st.success("Documents indexed successfully")
 
     # Regular chat input (separate from search)
     user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
