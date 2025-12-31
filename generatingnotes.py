@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 # =========================
-# LOAD ENV
+# LOD ENV
 # =========================
 load_dotenv()
 
