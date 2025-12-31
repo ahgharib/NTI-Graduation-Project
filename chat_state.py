@@ -25,11 +25,13 @@ class ProjectPlan(BaseModel):
 
 class MCQ(BaseModel):
     question: str = Field(..., description="The multiple-choice question")
+    skill: str = Field(..., description="The skill being tested")
     options: List[str] = Field(..., description="List of answer options")
     correct_answer: str = Field(..., description="The correct answer from the options")
 
 class ArticleQuestion(BaseModel):
     question: str = Field(..., description="The article question")
+    skill: str = Field(..., description="The skill being tested")
     answer: str = Field(..., description="The article answer")
 
 class CodingQuestion(BaseModel):
@@ -69,3 +71,5 @@ class AgentState(TypedDict):
     
     # --- CHANGED: Added Summary Field ---
     conversation_summary: Optional[str] # Holds the LLM-summarized history
+    user_submission: Optional[Dict[str, Any]]
+    user_profile_summary: Optional[Dict[str, Any]]

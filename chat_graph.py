@@ -5,6 +5,9 @@ from orchestrator import Orchestrator
 from quiz_agent import quiz_node
 from explainer_agent import explainer_node
 from summarizer_agent import summarizer_node # <--- IMPORTED
+from user_summary_node import user_summary_node # <--- IMPORTED
+from langgraph.checkpoint.memory import MemorySaver
+
 
 def scheduler(state: AgentState):
     """Schedule the next node to execute based on the plan."""
@@ -35,16 +38,19 @@ def create_study_buddy_graph():
     workflow.add_node("quiz_generator", quiz_node)
     workflow.add_node("explain_node", explainer_node)
     workflow.add_node("summarizer", summarizer_node) # <--- ADDED NODE
+    workflow.add_node("user_summary_node", user_summary_node) # <--- ADDED NODE
     
     # Entry Point
     workflow.set_entry_point("orchestrator")
     
     # Edges to Scheduler
     workflow.add_edge("orchestrator", "scheduler")
-    workflow.add_edge("quiz_generator", "scheduler")
+    workflow.add_edge("quiz_generator", "user_summary_node") # <--- MODIFIED EDGE
     workflow.add_edge("explain_node", "scheduler")
     workflow.add_edge("summarizer", "scheduler") # <--- ADDED EDGE
-    
+
+    workflow.add_edge("user_summary_node", "scheduler") # <--- ADDED EDGE
+
     # Conditional Edges from Scheduler
     workflow.add_conditional_edges(
         "scheduler",
@@ -56,7 +62,9 @@ def create_study_buddy_graph():
             "END": END
         }
     )
-    
-    return workflow.compile()
+    # Memory Checkpointing
+    memory_saver = MemorySaver()
+
+    return workflow.compile(interrupt_before=["user_summary_node"], checkpointer=memory_saver)
 
 study_buddy_graph = create_study_buddy_graph()

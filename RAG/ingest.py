@@ -1,11 +1,14 @@
 import os
 import logging
-import streamlit as st
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
+from langchain_ollama import ChatOllama
+from langchain_core.messages import HumanMessage
+from transformers import AutoTokenizer
+from RAG.prompts import CHUNK_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT
 from RAG.OCR import extract_text_from_pdf, clean_text
 
 VECTORSTORE_PATH = "RAG/vectorstore"
@@ -18,6 +21,49 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+# -------------------
+# LLM Setup
+# -------------------
+llm = ChatOllama(model="llama3", temperature=0.0)
+
+# -------------------
+# Tokenizer setup
+# -------------------
+tokenizer = AutoTokenizer.from_pretrained(
+    "sentence-transformers/all-MiniLM-L6-v2"
+)
+
+def count_tokens(text: str) -> int:
+    return len(tokenizer.encode(text, add_special_tokens=False))
+
+def compute_chunk_params(total_tokens: int):
+    if total_tokens < 2_000:
+        return 1200, 200
+    elif total_tokens < 10_000:
+        return 900, 200
+    elif total_tokens < 50_000:
+        return 700, 150
+    else:
+        return 500, 100
+
+def build_adaptive_splitter(documents):
+    full_text = " ".join(d.page_content for d in documents)
+    total_tokens = count_tokens(full_text)
+
+    chunk_size, chunk_overlap = compute_chunk_params(total_tokens)
+
+    logger.info(
+        f"Adaptive chunking | tokens={total_tokens} | "
+        f"chunk_size={chunk_size} | overlap={chunk_overlap}"
+    )
+
+    return RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=count_tokens
+    )
 
 # -------------------
 # PDF ingestion
@@ -63,10 +109,7 @@ def ingest_pdf(file_path: str):
 
     # 3️⃣ Split per-page documents
     logger.info("Splitting documents into chunks...")
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=150
-    )
+    splitter = build_adaptive_splitter(all_documents)
     chunks = splitter.split_documents(all_documents)
     logger.info(f"Created {len(chunks)} chunks from {len(all_documents)} pages.")
 
@@ -85,22 +128,60 @@ def ingest_pdf(file_path: str):
 
 
     # 4️⃣ Embeddings
-    logger.info("Creating embeddings with Ollama...")
+
+    logger.info("Summarizing each chunk and embedding summaries...")
+
+    chunk_summary_documents = []
+    file_chunk_summaries = []
+
+    for idx, chunk in enumerate(chunks):
+        prompt = CHUNK_SUMMARY_PROMPT.format(content=chunk.page_content)
+
+        response = llm.invoke([HumanMessage(content=prompt)])
+        summary_text = response.content.strip()
+
+        # 🔍 DEBUG PRINT
+        print(f"\n[DEBUG] Chunk {idx+1} summary:\n{summary_text}\n")
+
+        file_chunk_summaries.append(summary_text)
+
+        chunk_summary_documents.append(
+            Document(
+                page_content=summary_text,
+                metadata={**chunk.metadata,
+                          "original_content": chunk.page_content}
+            )
+        )
+
+    logger.info("Storing chunk summary embeddings...")
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
 
-    # 5️⃣ Vector store (append-safe)
-    if st.session_state.vectorstore is None:
-        st.session_state.vectorstore = FAISS.from_documents(chunks, embeddings)
-    else:
-        st.session_state.vectorstore.add_documents(chunks)
 
-        logger.info(f"Vectorstore now contains {st.session_state.vectorstore.index.ntotal} vectors")
 
-    st.session_state.vectorstore.save_local(VECTORSTORE_PATH)
-    logger.info(f"Vector store saved at {VECTORSTORE_PATH}.")
+    # 6️⃣ File-level summary
+    logger.info("Generating file-level summary...")
+    file_prompt = FILE_SUMMARY_PROMPT.format(summaries="\n".join(file_chunk_summaries))
+
+    file_response = llm.invoke([HumanMessage(content=file_prompt)])
+    file_summary_text = file_response.content.strip()
+
+    # 🔍 DEBUG PRINT
+    print(f"\n[DEBUG] File summary:\n{file_summary_text}\n")
+
+    file_summary_doc = Document(
+    page_content=file_summary_text,
+    metadata={
+        "source": file_path,
+        "type": "file_summary"
+    })
+
+    logger.info("Storing file summary embedding...")
+
+
+
 
     logger.info(f"Ingestion complete. Total chunks: {len(chunks)}")
-    return len(chunks)
+    return chunk_summary_documents, file_summary_doc
 
 if __name__ == "__main__":
-    ingest_pdf("/home/sg/Desktop/Serag_Ehab_2 pages ocr.pdf")
+    ingest_pdf("/home/sg/Desktop/Serag_Ehab_2 pages.pdf")

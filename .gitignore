@@ -17,7 +17,7 @@ ignored_files/
 *.json
 
 # Ignore .txt files in the home directory only
-*.txt
+search_results.txt
 
 RAG/data/
 
