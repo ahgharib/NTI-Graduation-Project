@@ -41,7 +41,10 @@ def select_milestone(node_id):
 
 def perform_search():
     """Execute search and update chat history."""
-    if st.session_state.search_query.strip():
+    # Read directly from the widget's key in session_state
+    query = st.session_state.get("search_query", "").strip()
+
+    if query:
         # Get the context from selected milestone
         context = ""
         if st.session_state.clicked_node and st.session_state.plan_json:
@@ -51,7 +54,7 @@ def perform_search():
                 context = ms_data['title']
         
         # Add user message to chat history
-        user_message = f"🔍 Search: {st.session_state.search_query}"
+        user_message = f"🔍 Search: {query}"
         st.session_state.chat_history.append({"role": "user", "content": user_message})
         
         # Set searching flag
@@ -61,7 +64,7 @@ def perform_search():
         try:
             with st.spinner("Searching web and YouTube..."):
                 search_result = search_with_agent(
-                    query=st.session_state.search_query,
+                    query=query,
                     context=context
                 )
             
@@ -75,12 +78,11 @@ def perform_search():
             error_msg = f"Search failed: {str(e)}"
             st.session_state.chat_history.append({"role": "ai", "content": error_msg})
         
-        # Reset search state
+        # Reset search state and clear the query
         st.session_state.is_searching = False
         st.session_state.search_query = ""
         
-        # Rerun to update UI
-        st.rerun()
+        # Note: No st.rerun() here. It's handled by the callback mechanism or the button's explicit rerun.
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -138,7 +140,8 @@ with st.sidebar:
     with col_gen:
         generate_clicked = st.button("Generate Roadmap", use_container_width=True)
     with col_up:
-        uploaded_file = st.file_uploader("", type=["json"], label_visibility="collapsed", key="file_up_icon")
+        # Added label "Upload JSON" to fix warning
+        uploaded_file = st.file_uploader("Upload JSON", type=["json"], label_visibility="collapsed", key="file_up_icon")
 
     if uploaded_file is not None:
         if "last_uploaded_file" not in st.session_state or st.session_state.last_uploaded_file != uploaded_file.name:
@@ -239,7 +242,7 @@ with col1:
     selected_ms_text = ""
     if st.session_state.plan_json and st.session_state.clicked_node:
         ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
-                       if m.get("id") == st.session_state.clicked_node), None)
+                        if m.get("id") == st.session_state.clicked_node), None)
         if ms_data:
             st.info(f"Focused on: **{ms_data['title']}**")
             selected_ms_text = f"Title: {ms_data['title']}. Description: {ms_data['description']}."
@@ -267,31 +270,31 @@ with col1:
     
     with search_col:
         # Search input that triggers on Enter
-        search_query = st.text_input(
+        # Binds directly to 'search_query' key to avoid state desync
+        st.text_input(
             "Search query...",
-            value=st.session_state.search_query,
-            key="search_input",
+            key="search_query", 
             on_change=perform_search,
             label_visibility="collapsed",
             placeholder="Search the web and YouTube..."
         )
-        if search_query:
-            st.session_state.search_query = search_query
     
     with web_col:
         # Search button
-        if st.button("🔍", use_container_width=True, help="Search the web and YouTube"):
-            if st.session_state.search_query:
-                perform_search()
-            else:
-                st.warning("Please enter a search query first")
+        # Uses callback to run logic, then reruns UI to show update
+        if st.button("🔍", on_click=perform_search, use_container_width=True, help="Search the web and YouTube"):
+            # Rerun is needed here because button clicks don't auto-rerun *after* callbacks in the same way inputs do
+            # Wait, actually: Streamlit auto-reruns after ANY callback. 
+            # We don't strictly need st.rerun() if perform_search modifies state.
+            pass 
     
     with yt_col:
         st.button("📺", use_container_width=True, help="Direct YouTube search (coming soon)")
     
     with doc_col:
+        # Added label "Upload PDF" to fix warning
         uploaded_docs = st.file_uploader(
-            "📄",
+            "Upload PDF",
             type=["pdf"],
             accept_multiple_files=True,
             label_visibility="collapsed",
@@ -417,7 +420,7 @@ with col2:
     st.subheader("📝 Milestone Details")
     if st.session_state.clicked_node and st.session_state.plan_json:
         ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
-                       if m.get("id") == st.session_state.clicked_node), None)
+                        if m.get("id") == st.session_state.clicked_node), None)
         if ms_data:
             st.markdown(f"### {ms_data['title']}")
             st.caption(f"Status: {ms_data['status'].upper()}")
