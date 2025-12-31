@@ -1,6 +1,5 @@
 import streamlit as st
 import json
-import uuid
 from streamlit_agraph import agraph, Node, Edge, Config as AgConfig
 from graph import app_graph, editor_graph 
 from state import PlanState
@@ -31,30 +30,21 @@ if "new_chat_input" not in st.session_state:
 if "uploaded_docs" not in st.session_state:
     st.session_state.uploaded_docs = {}
 if "vectorstore" not in st.session_state:
-    st.session_state.vectorstore = None  # chunk summaries
-if "file_vectorstore" not in st.session_state:
-    st.session_state.file_vectorstore = None # file summaries
     st.session_state.vectorstore = None
 if "search_query" not in st.session_state:
     st.session_state.search_query = ""
 if "is_searching" not in st.session_state:
     st.session_state.is_searching = False
-if "active_quiz" not in st.session_state:
-    st.session_state.active_quiz = None  # stores Quiz object
-if "quiz_answers" not in st.session_state:
-    st.session_state.quiz_answers = {}
-if "quiz_submitted" not in st.session_state:
-    st.session_state.quiz_submitted = False
-if "quiz_thread_id" not in st.session_state:
-    st.session_state.quiz_thread_id = str(uuid.uuid4())
-
 
 def select_milestone(node_id):
     st.session_state.clicked_node = node_id
 
 def perform_search():
     """Execute search and update chat history."""
-    if st.session_state.search_query.strip():
+    # Read directly from the widget's key in session_state
+    query = st.session_state.get("search_query", "").strip()
+
+    if query:
         # Get the context from selected milestone
         context = ""
         if st.session_state.clicked_node and st.session_state.plan_json:
@@ -64,7 +54,7 @@ def perform_search():
                 context = ms_data['title']
         
         # Add user message to chat history
-        user_message = f"🔍 Search: {st.session_state.search_query}"
+        user_message = f"🔍 Search: {query}"
         st.session_state.chat_history.append({"role": "user", "content": user_message})
         
         # Set searching flag
@@ -74,7 +64,7 @@ def perform_search():
         try:
             with st.spinner("Searching web and YouTube..."):
                 search_result = search_with_agent(
-                    query=st.session_state.search_query,
+                    query=query,
                     context=context
                 )
             
@@ -88,12 +78,11 @@ def perform_search():
             error_msg = f"Search failed: {str(e)}"
             st.session_state.chat_history.append({"role": "ai", "content": error_msg})
         
-        # Reset search state
+        # Reset search state and clear the query
         st.session_state.is_searching = False
         st.session_state.search_query = ""
         
-        # Rerun to update UI
-        st.rerun()
+        # Note: No st.rerun() here. It's handled by the callback mechanism or the button's explicit rerun.
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -151,7 +140,8 @@ with st.sidebar:
     with col_gen:
         generate_clicked = st.button("Generate Roadmap", use_container_width=True)
     with col_up:
-        uploaded_file = st.file_uploader("collapsed", type=["json"], label_visibility="collapsed", key="file_up_icon")
+        # Added label "Upload JSON" to fix warning
+        uploaded_file = st.file_uploader("Upload JSON", type=["json"], label_visibility="collapsed", key="file_up_icon")
 
     if uploaded_file is not None:
         if "last_uploaded_file" not in st.session_state or st.session_state.last_uploaded_file != uploaded_file.name:
@@ -205,303 +195,200 @@ with st.sidebar:
 col1, col2 = st.columns([3, 1.2])
 
 with col1:
-    tabs = st.tabs(["🤖 Assistant", "📝 Quiz"])
-    with tabs[0]:
-        st.subheader("Interactive Roadmap")
-        if st.session_state.plan_json:
-            nodes = []
-            edges = []
-            milestones = st.session_state.plan_json.get("milestones", [])
-            for i, ms in enumerate(milestones):
-                ms_id = ms.get("id", f"m{i}")
-                
-                # --- COLOR LOGIC EDITED HERE ---
-                # Default node color is Red. If selected, it becomes Blue.
-                is_selected = st.session_state.clicked_node == ms_id
-                node_color = "blue" if is_selected else "red"
-                node_size = 35 if is_selected else 25
-                
-                nodes.append(Node(
-                    id=ms_id, 
-                    label=ms["title"], 
-                    size=node_size, 
-                    color=node_color,
-                    font={'color': 'green'}  # LABEL COLOR: Green
-                ))
-                
-                if i > 0:
-                    prev_id = milestones[i-1].get("id", f"m{i-1}")
-                    edges.append(Edge(source=prev_id, target=ms_id, type="CURVE_SMOOTH"))
-
-            # Config updated to ensure label colors and highlighting work as expected
-            config = AgConfig(
-                width=700, 
-                height=400, 
-                directed=True,
-                physics=False, 
-                nodeHighlightBehavior=True,
-                highlightColor="blue"
-            )
+    st.subheader("Interactive Roadmap")
+    if st.session_state.plan_json:
+        nodes = []
+        edges = []
+        milestones = st.session_state.plan_json.get("milestones", [])
+        for i, ms in enumerate(milestones):
+            ms_id = ms.get("id", f"m{i}")
             
-            returned_id = agraph(nodes=nodes, edges=edges, config=config)
-            if returned_id and returned_id != st.session_state.clicked_node:
-                st.session_state.clicked_node = returned_id
-                st.rerun()
+            # --- COLOR LOGIC EDITED HERE ---
+            # Default node color is Red. If selected, it becomes Blue.
+            is_selected = st.session_state.clicked_node == ms_id
+            node_color = "blue" if is_selected else "red"
+            node_size = 35 if is_selected else 25
+            
+            nodes.append(Node(
+                id=ms_id, 
+                label=ms["title"], 
+                size=node_size, 
+                color=node_color,
+                font={'color': 'green'}  # LABEL COLOR: Green
+            ))
+            
+            if i > 0:
+                prev_id = milestones[i-1].get("id", f"m{i-1}")
+                edges.append(Edge(source=prev_id, target=ms_id, type="CURVE_SMOOTH"))
 
-        st.divider()
-        st.subheader("🤖 Smart Assistant")
+        # Config updated to ensure label colors and highlighting work as expected
+        config = AgConfig(
+            width=700, 
+            height=400, 
+            directed=True,
+            physics=False, 
+            nodeHighlightBehavior=True,
+            highlightColor="blue"
+        )
         
-        selected_ms_text = ""
-        if st.session_state.plan_json and st.session_state.clicked_node:
-            ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
+        returned_id = agraph(nodes=nodes, edges=edges, config=config)
+        if returned_id and returned_id != st.session_state.clicked_node:
+            st.session_state.clicked_node = returned_id
+            st.rerun()
+
+    st.divider()
+    st.subheader("🤖 Smart Assistant")
+    
+    selected_ms_text = ""
+    if st.session_state.plan_json and st.session_state.clicked_node:
+        ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
                         if m.get("id") == st.session_state.clicked_node), None)
-            if ms_data:
-                st.info(f"Focused on: **{ms_data['title']}**")
-                selected_ms_text = f"Title: {ms_data['title']}. Description: {ms_data['description']}."
+        if ms_data:
+            st.info(f"Focused on: **{ms_data['title']}**")
+            selected_ms_text = f"Title: {ms_data['title']}. Description: {ms_data['description']}."
 
-        chat_box = st.container(height=500, border=True)
-        with chat_box:
-            for msg in st.session_state.chat_history:
-                with st.chat_message(msg["role"]):
-                    st.write(msg["content"])
-            
-            # Show loading animation when searching
-            if st.session_state.is_searching:
-                with st.chat_message("assistant"):
-                    st.markdown(
-                        """
-                        <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
-                            <img src="https://i.gifer.com/ZKZg.gif" width="60" />
-                        </div>
-                        """, 
-                        unsafe_allow_html=True
-                    )
-
-        # UPDATED: Search input and buttons layout
-        search_col, web_col, yt_col, doc_col = st.columns([0.7, 0.1, 0.1, 0.1])
+    chat_box = st.container(height=500, border=True)
+    with chat_box:
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
         
-        with search_col:
-            # Search input that triggers on Enter
-            search_query = st.text_input(
-                "Search query...",
-                value=st.session_state.search_query,
-                key="search_input",
-                on_change=perform_search,
-                label_visibility="collapsed",
-                placeholder="Search the web and YouTube..."
-            )
-            if search_query:
-                st.session_state.search_query = search_query
-        
-        with web_col:
-            # Search button
-            if st.button("🔍", use_container_width=True, help="Search the web and YouTube"):
-                if st.session_state.search_query:
-                    perform_search()
-                else:
-                    st.warning("Please enter a search query first")
-        
-        with yt_col:
-            st.button("📺", use_container_width=True, help="Direct YouTube search (coming soon)")
-        
-        with doc_col:
-            uploaded_docs = st.file_uploader(
-                "📄",
-                type=["pdf"],
-                accept_multiple_files=True,
-                label_visibility="collapsed",
-                help="Upload documents to use as reference"
-            )
-            # if st.session_state.uploaded_docs:
-            #     for name in st.session_state.uploaded_docs:
-            #         st.caption(f"• {name}")
-
-        if uploaded_docs:
-            for uploaded_doc in uploaded_docs:
-
-                if uploaded_doc.name in st.session_state.uploaded_docs:
-                    continue  # already uploaded this session
-
-                file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
-
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_doc.getbuffer())
-                
-                st.session_state.uploaded_docs[uploaded_doc.name] = file_path
-
-        if st.button("📚 Index Documents"):
-            embeddings = OllamaEmbeddings(model="nomic-embed-text")
-
-            chunk_docs = []
-            file_docs = []
-
-            for path in st.session_state.uploaded_docs.values():
-                chunks, file_summary = ingest_pdf(path)
-                chunk_docs.extend(chunks)
-                file_docs.append(file_summary)
-
-            st.session_state.vectorstore = FAISS.from_documents(
-                chunk_docs, embeddings
-            )
-
-            st.session_state.file_vectorstore = FAISS.from_documents(
-                file_docs, embeddings
-            )
-
-            st.success("Documents indexed successfully")
-
-        # Regular chat input (separate from search)
-        user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
-
-        if user_input:
-            st.session_state.chat_history.append({"role": "user", "content": user_input})
-            with chat_box:
-                st.chat_message("user").write(user_input)
-
-            with st.spinner("Assistant is working..."):
-                history_context = ""
-                if len(st.session_state.chat_history) > 1:
-                    previous_turns = st.session_state.chat_history[:-1]
-                    history_context = summarize_history(previous_turns)
-                    
-                initial_chat_state = {
-                    "user_prompt": user_input,
-                    "messages": [],
-                    "plan_actions": [],
-                    "plan_instructions": [],
-                    "research_memory": [],
-                    "raw_data_storage": [],
-                    "execution_log": [],
-                    "validation_errors": [],
-                    "refinement_attempts": 0,
-                    "plan_data": st.session_state.plan_json,
-                    "selected_milestone_context": selected_ms_text,
-                    "conversation_summary": history_context
-                }
-
-                try:
-                    for chunk in study_buddy_graph.stream(initial_chat_state, stream_mode="updates",  config={"configurable": {"thread_id": st.session_state.quiz_thread_id}}):
-                        if "orchestrator" in chunk:
-                            plan = chunk["orchestrator"]
-                            actions = plan.get("plan_actions", [])
-                            if "END" in actions:
-                                with chat_box:
-                                    st.chat_message("ai").write("I cannot handle this request based on my capabilities.")
-                                    st.session_state.chat_history.append({"role": "ai", "content": "I cannot handle this request."})
-                            else:
-                                plan_msg = f"🔍 **Plan:** {', '.join(actions)}"
-                                with chat_box: st.caption(plan_msg)
-
-                        if "explain_node" in chunk:
-                            response_messages = chunk["explain_node"].get("messages", [])
-                            for msg in response_messages:
-                                with chat_box: st.chat_message("ai").write(msg.content)
-                                st.session_state.chat_history.append({"role": "ai", "content": msg.content})
-
-                        if "quiz_generator" in chunk:
-                            quiz_data = chunk["quiz_generator"].get("quiz_output")
-                            if quiz_data:
-                                st.session_state.active_quiz = quiz_data
-                                st.session_state.quiz_answers = {}
-                                st.session_state.quiz_submitted = False
-
-                                st.session_state.chat_history.append({
-                                    "role": "ai",
-                                    "content": "📝 A quiz has been generated. Open the **Quiz** tab to start."
-                                })
-
-                        
-                        if "summarizer" in chunk:
-                            response_messages = chunk["summarizer"].get("messages", [])
-                            for msg in response_messages:
-                                with chat_box: st.chat_message("ai").write(msg.content)
-                                st.session_state.chat_history.append({"role": "ai", "content": msg.content})
-                except Exception as e:
-                    st.error(f"Pipeline Error: {str(e)}")
-    with tabs[1]:
-        st.subheader("📝 Quiz")
-
-        quiz = st.session_state.active_quiz
-
-        if not quiz:
-            st.info("No active quiz yet. Ask the assistant to generate one.")
-        else:
-            st.markdown(f"### Topic: {quiz.topic}")
-            st.caption(f"Level: {quiz.proficiency_level}")
-
-            # ---------- MCQs ----------
-            st.markdown("## Multiple Choice Questions")
-            for idx, q in enumerate(quiz.mcq_questions):
-                answer = st.radio(
-                    q.question,
-                    q.options,
-                    key=f"mcq_{idx}",
-                    index=None
+        # Show loading animation when searching
+        if st.session_state.is_searching:
+            with st.chat_message("assistant"):
+                st.markdown(
+                    """
+                    <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
+                        <img src="https://i.gifer.com/ZKZg.gif" width="60" />
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
                 )
-                st.session_state.quiz_answers[f"mcq_{idx}"] = answer
 
-            # ---------- Article Questions ----------
-            if quiz.article_questions:
-                st.markdown("## Article Questions")
-                for idx, q in enumerate(quiz.article_questions):
-                    answer = st.text_area(
-                        q.question,
-                        key=f"article_{idx}"
-                    )
-                    st.session_state.quiz_answers[f"article_{idx}"] = answer
+    # UPDATED: Search input and buttons layout
+    search_col, web_col, yt_col, doc_col = st.columns([0.7, 0.1, 0.1, 0.1])
+    
+    with search_col:
+        # Search input that triggers on Enter
+        # Binds directly to 'search_query' key to avoid state desync
+        st.text_input(
+            "Search query...",
+            key="search_query", 
+            on_change=perform_search,
+            label_visibility="collapsed",
+            placeholder="Search the web and YouTube..."
+        )
+    
+    with web_col:
+        # Search button
+        # Uses callback to run logic, then reruns UI to show update
+        if st.button("🔍", on_click=perform_search, use_container_width=True, help="Search the web and YouTube"):
+            # Rerun is needed here because button clicks don't auto-rerun *after* callbacks in the same way inputs do
+            # Wait, actually: Streamlit auto-reruns after ANY callback. 
+            # We don't strictly need st.rerun() if perform_search modifies state.
+            pass 
+    
+    with yt_col:
+        st.button("📺", use_container_width=True, help="Direct YouTube search (coming soon)")
+    
+    with doc_col:
+        # Added label "Upload PDF" to fix warning
+        uploaded_docs = st.file_uploader(
+            "Upload PDF",
+            type=["pdf"],
+            accept_multiple_files=True,
+            label_visibility="collapsed",
+            help="Upload documents to use as reference"
+        )
+        if st.session_state.uploaded_docs:
+            for name in st.session_state.uploaded_docs:
+                st.caption(f"• {name}")
 
-            # ---------- Coding Questions ----------
-            if quiz.coding_questions:
-                st.markdown("## Coding Questions")
-                for idx, q in enumerate(quiz.coding_questions):
-                    st.markdown(f"**{q.question}**")
-                    answer = st.text_area(
-                        "Your code:",
-                        height=200,
-                        key=f"code_{idx}"
-                    )
-                    st.session_state.quiz_answers[f"code_{idx}"] = answer
+    if uploaded_docs:
+        for uploaded_doc in uploaded_docs:
+            file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
 
-            # ---------- SUBMIT ----------
-            if st.button("✅ Submit Quiz"):
-                submission = {
-                    "quiz": quiz.model_dump(),
-                    "user_answers": st.session_state.quiz_answers
-                }
+            # Skip if already uploaded this session
+            if uploaded_doc.name in st.session_state.uploaded_docs:
+                continue
 
+            with open(file_path, "wb") as f:
+                f.write(uploaded_doc.getbuffer())
 
+            try:
+                ingest_pdf(file_path)
+                st.session_state.uploaded_docs[uploaded_doc.name] = file_path
+                st.toast(f"Indexed: {uploaded_doc.name}", icon="✅")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to ingest {uploaded_doc.name}: {e}")
 
-                filename = f"quiz_submission_{uuid.uuid4().hex}.json"
-                save_path = os.path.join("quiz_submissions", filename)
-                os.makedirs("quiz_submissions", exist_ok=True)
+    # Regular chat input (separate from search)
+    user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
 
-                with open(save_path, "w") as f:
-                    json.dump(submission, f, indent=2)
+    if user_input:
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+        with chat_box:
+            st.chat_message("user").write(user_input)
 
-                st.session_state.quiz_submitted = True
-                st.success(f"Quiz submitted successfully!\nSaved as `{filename}`")
-                with st.spinner("Submitting quiz for evaluation..."):
-                    events = study_buddy_graph.stream(
-                        None,
-                        config={
-                            "configurable": {
-                                "thread_id": st.session_state.quiz_thread_id,
-                                "resume": submission
-                            }
-                        }
-                    )
+        with st.spinner("Assistant is working..."):
+            history_context = ""
+            if len(st.session_state.chat_history) > 1:
+                previous_turns = st.session_state.chat_history[:-1]
+                history_context = summarize_history(previous_turns)
+                
+            initial_chat_state = {
+                "user_prompt": user_input,
+                "messages": [],
+                "plan_actions": [],
+                "plan_instructions": [],
+                "research_memory": [],
+                "raw_data_storage": [],
+                "execution_log": [],
+                "validation_errors": [],
+                "refinement_attempts": 0,
+                "plan_data": st.session_state.plan_json,
+                "selected_milestone_context": selected_ms_text,
+                "conversation_summary": history_context
+            }
 
-                    result = None
-                    for event in events:
-                        if isinstance(event, dict):
-                            result = event
-                # Optional: display summary immediately if returned
-                if result and "user_profile_summary" in result:
-                    summary = result["user_profile_summary"]
-                    st.subheader("📊 Performance Summary")
-                    st.metric("Accuracy", f"{summary['accuracy']}%")
-                    st.markdown(summary["summary_text"])
+            try:
+                for chunk in study_buddy_graph.stream(initial_chat_state, stream_mode="updates"):
+                    if "orchestrator" in chunk:
+                        plan = chunk["orchestrator"]
+                        actions = plan.get("plan_actions", [])
+                        if "END" in actions:
+                            with chat_box:
+                                st.chat_message("ai").write("I cannot handle this request based on my capabilities.")
+                                st.session_state.chat_history.append({"role": "ai", "content": "I cannot handle this request."})
+                        else:
+                            plan_msg = f"🔍 **Plan:** {', '.join(actions)}"
+                            with chat_box: st.caption(plan_msg)
 
+                    if "explain_node" in chunk:
+                        response_messages = chunk["explain_node"].get("messages", [])
+                        for msg in response_messages:
+                            with chat_box: st.chat_message("ai").write(msg.content)
+                            st.session_state.chat_history.append({"role": "ai", "content": msg.content})
+
+                    if "quiz_generator" in chunk:
+                        quiz_data = chunk["quiz_generator"].get("quiz_output")
+                        if quiz_data:
+                            quiz_str = f"**Quiz: {quiz_data.topic}**\n\n"
+                            for q in quiz_data.mcq_questions:
+                                quiz_str += f"❓ {q.question}\n"
+                                for opt in q.options: quiz_str += f"- {opt}\n"
+                                quiz_str += f"*(Answer: {q.correct_answer})*\n\n"
+                            with chat_box: st.chat_message("ai").markdown(quiz_str)
+                            st.session_state.chat_history.append({"role": "ai", "content": quiz_str})
+                    
+                    if "summarizer" in chunk:
+                        response_messages = chunk["summarizer"].get("messages", [])
+                        for msg in response_messages:
+                            with chat_box: st.chat_message("ai").write(msg.content)
+                            st.session_state.chat_history.append({"role": "ai", "content": msg.content})
+            except Exception as e:
+                st.error(f"Pipeline Error: {str(e)}")
 
 with col2:
     st.subheader("🛠️ Roadmap Manager")
@@ -533,7 +420,7 @@ with col2:
     st.subheader("📝 Milestone Details")
     if st.session_state.clicked_node and st.session_state.plan_json:
         ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
-                       if m.get("id") == st.session_state.clicked_node), None)
+                        if m.get("id") == st.session_state.clicked_node), None)
         if ms_data:
             st.markdown(f"### {ms_data['title']}")
             st.caption(f"Status: {ms_data['status'].upper()}")
