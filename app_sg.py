@@ -169,6 +169,11 @@ st.markdown("""
         [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
         [data-testid="stFileUploader"] section { padding: 0.5rem; border-color: rgba(0, 240, 255, 0.2); }
         hr { margin-top: 0; margin-bottom: 2rem; border: none; height: 1px; background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.5), transparent); }
+        
+        /* --- !!! ADDED TO HIDE DEFAULT SIDEBAR NAV !!! --- */
+        [data-testid="stSidebarNav"] {
+            display: none !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
