@@ -72,4 +72,4 @@ class AgentState(TypedDict):
     # --- CHANGED: Added Summary Field ---
     conversation_summary: Optional[str] # Holds the LLM-summarized history
     user_submission: Optional[Dict[str, Any]]
-    user_profile_summary: Optional[Dict[str, Any]]
+    grader_output: Optional[Dict[str, Any]]

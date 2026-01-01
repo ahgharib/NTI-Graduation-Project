@@ -207,6 +207,8 @@ if "quiz_submitted" not in st.session_state:
     st.session_state.quiz_submitted = False
 if "quiz_thread_id" not in st.session_state:
     st.session_state.quiz_thread_id = str(uuid.uuid4())
+if "last_quiz_result" not in st.session_state:
+    st.session_state.last_quiz_result = None
 # NEW SESSION STATE FOR GENERATED CONTENT
 if "generated_video" not in st.session_state: 
     st.session_state.generated_video = None
@@ -551,13 +553,7 @@ if st.session_state.view_mode == "Dashboard":
             with chat_container:
                 st.chat_message("user").write(user_input)
             
-            # KEYWORD TRIGGER
-            if "quiz" in user_input.lower():
-                notification_msg = "Go check the quiz page! 📝"
-                st.session_state.chat_history.append({"role": "ai", "content": notification_msg})
-                with chat_container:
-                    st.chat_message("ai").write(notification_msg)
-            else:
+
                 with st.spinner("Processing..."):
                     history_context = ""
                     if len(st.session_state.chat_history) > 1:
@@ -667,80 +663,192 @@ if st.session_state.view_mode == "Dashboard":
 # === VIEW 2: QUIZ PAGE (Dedicated Full Screen) ===
 # =========================================================
 elif st.session_state.view_mode == "Take Quiz":
-    
-    # Centered container for better readability
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.markdown('<h3>📝 Knowledge Check</h3>', unsafe_allow_html=True)
-        
+
+    quiz_container = st.empty()
+
+    with quiz_container.container():
+
         quiz = st.session_state.active_quiz
-        if not quiz:
-            st.warning("⚠️ No Active Quiz Found")
-            st.markdown("""
-                1. Go to the **Dashboard**.
-                2. Ask the AI: _"Generate a quiz about [Topic]"_.
-                3. Come back here to take it!
-            """)
-        else:
+        submitted = st.session_state.get("quiz_submitted", False)
+        results = st.session_state.get("last_quiz_result")
+
+        if quiz:
+
+            # =============================
+            # HEADER
+            # =============================
+            st.markdown('<h3>📝 Knowledge Check</h3>', unsafe_allow_html=True)
             st.info(f"Topic: **{quiz.topic}** | Difficulty: **{quiz.proficiency_level}**")
-            st.divider()
-            
-            with st.form("quiz_form"):
-                # 1. MCQs
-                st.subheader("Multiple Choice")
-                for idx, q in enumerate(quiz.mcq_questions):
-                    st.markdown(f"**{idx+1}. {q.question}**")
-                    st.session_state.quiz_answers[f"mcq_{idx}"] = st.radio(
-                        "Select Option:", q.options, key=f"mcq_{idx}", index=None, label_visibility="collapsed"
+
+            # =============================
+            # OVERALL RESULT (TOP – AFTER SUBMISSION)
+            # =============================
+            if submitted and results:
+                summary = results["summary"]
+
+                st.divider()
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.metric(
+                        "🎯 Total Score",
+                        f"{summary['score']} / {summary['total']}"
                     )
-                    st.write("") # Spacer
-                
+
+                with col2:
+                    st.metric(
+                        "📊 Accuracy",
+                        f"{summary['accuracy']}%"
+                    )
+
+                st.divider()
+            else:
                 st.divider()
 
-                # 2. Short Answer
+            # =============================
+            # QUIZ FORM (INPUTS ONLY)
+            # =============================
+            with st.form("quiz_form"):
+
+                # ---------- MCQs ----------
+                st.subheader("Multiple Choice")
+
+                for idx, q in enumerate(quiz.mcq_questions):
+                    key = f"mcq_{idx}"
+                    user_answer = st.session_state.quiz_answers.get(key)
+
+                    st.markdown(f"**{idx+1}. {q.question}**")
+
+                    st.session_state.quiz_answers[key] = st.radio(
+                        "Select Option",
+                        q.options,
+                        index=q.options.index(user_answer) if user_answer in q.options else None,
+                        key=key,
+                        disabled=submitted,
+                        label_visibility="collapsed"
+                    )
+                    # ----- RESULT (AFTER SUBMISSION) -----
+                    if submitted and results:
+                        r = results["mcq_results"][idx]
+
+                        border = "green" if r["is_correct"] else "red"
+                        icon = "✅" if r["is_correct"] else "❌"
+
+                        reasoning_html = (
+                            "<i>Correct answer!</i>"
+                            if r["is_correct"]
+                            else f"<i>{r['reasoning']}</i>"
+                        )
+
+                        st.markdown(
+                            f"""
+                            <div style="
+                                border:2px solid {border};
+                                border-radius:8px;
+                                padding:10px;
+                                margin-top:6px;
+                            ">
+                            {icon} <b>Your answer:</b> {user_answer}<br>
+                            {reasoning_html}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                    st.write("")
+
+                # ---------- ARTICLES ----------
                 if quiz.article_questions:
                     st.subheader("Short Answer")
+
                     for idx, q in enumerate(quiz.article_questions):
+                        key = f"article_{idx}"
+                        user_answer = st.session_state.quiz_answers.get(key, "")
+
                         st.markdown(f"**{q.question}**")
-                        st.session_state.quiz_answers[f"article_{idx}"] = st.text_area(
-                            "Your Answer:", key=f"article_{idx}", label_visibility="collapsed"
+
+                        st.session_state.quiz_answers[key] = st.text_area(
+                            "Your Answer",
+                            value=user_answer,
+                            key=key,
+                            disabled=submitted,
+                            label_visibility="collapsed"
                         )
+
+                        # ----- RESULT (AFTER SUBMISSION) -----
+                        if submitted and results:
+                            r = results["article_results"][idx]
+
+                            if r["score"] == r["out_of"]:
+                                border = "green"
+                                icon = "✅"
+                            elif r["score"] > 0:
+                                border = "orange"
+                                icon = "🟡"
+                            else:
+                                border = "red"
+                                icon = "❌"
+
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    border:2px solid {border};
+                                    border-radius:8px;
+                                    padding:10px;
+                                    margin-top:6px;
+                                ">
+                                {icon} <b>Score:</b> {r["score"]}/{r["out_of"]}<br>
+                                <i>{r["reasoning"]}</i>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+
                         st.write("")
 
                 st.divider()
 
-                # 3. Coding Challenge
-                if quiz.coding_questions:
-                    st.subheader("Coding Challenge")
-                    for idx, q in enumerate(quiz.coding_questions):
-                        st.markdown(f"**{q.question}**")
-                        st.session_state.quiz_answers[f"code_{idx}"] = st.text_area(
-                            "Write Code:", height=200, key=f"code_{idx}", label_visibility="collapsed",
-                            placeholder="def solution():\n    pass"
-                        )
-                        st.write("")
+                submit_btn = st.form_submit_button(
+                    "✅ Submit Quiz",
+                    type="primary",
+                    disabled=submitted
+                )
 
-                submit_btn = st.form_submit_button("✅ Submit Quiz", type="primary", use_container_width=True)
+            # =============================
+            # SUBMISSION LOGIC (OUTSIDE FORM)
+            # =============================
+            if submit_btn and not submitted:
 
-                if submit_btn:
-                    submission = {"quiz": quiz.model_dump(), "user_answers": st.session_state.quiz_answers}
-                    st.session_state.quiz_submitted = True
-                    
-                    with st.spinner("Grading your answers..."):
-                        # Logic to stream grading result
-                        events = study_buddy_graph.stream(None, config={"configurable": {"thread_id": st.session_state.quiz_thread_id, "resume": submission}})
-                        for event in events:
-                             if isinstance(event, dict) and "user_profile_summary" in event:
-                                 st.session_state.last_quiz_result = event["user_profile_summary"]
-                    st.rerun()
-            
-            # Show Results if available
-            if st.session_state.get("last_quiz_result"):
-                res = st.session_state.last_quiz_result
+                submission = {
+                    "quiz": quiz.model_dump(),
+                    "user_answers": st.session_state.quiz_answers
+                }
+
+                study_buddy_graph.update_state(
+                    {"configurable": {"thread_id": st.session_state.quiz_thread_id}},
+                    {"user_submission": submission}
+                )
+
+                with st.spinner("Grading your answers..."):
+                    for event in study_buddy_graph.stream(
+                        None,
+                        config={"configurable": {"thread_id": st.session_state.quiz_thread_id}}
+                    ):
+                        if isinstance(event, dict):
+                            for node_name, node_output in event.items():
+                                if (
+                                    node_name == "user_summary_node"
+                                    and isinstance(node_output, dict)
+                                    and "grader_output" in node_output
+                                ):
+                                    st.session_state.last_quiz_result = node_output["grader_output"]
+
+                st.session_state.quiz_submitted = True
+                st.rerun()
+            # =============================
+            # FEEDBACK (BOTTOM)
+            # =============================
+            if submitted and results:
                 st.divider()
-                st.success("🎉 Evaluation Complete!")
-                col_score, col_msg = st.columns([1, 4])
-                with col_score:
-                    st.metric("Score", f"{res['accuracy']}%")
-                with col_msg:
-                    st.markdown(res["summary_text"])
+                st.subheader("🧠 Overall Feedback")
+                st.info(results["summary"]["feedback"])
