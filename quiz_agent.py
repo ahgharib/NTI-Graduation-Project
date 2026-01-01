@@ -24,8 +24,8 @@ def quiz_node(state: AgentState):
     # We use Gemini for structured quiz generation as in your config
 
     
-    # llm = Config.get_gemini_llm().with_structured_output(Quiz)
-    llm = Config.get_ollama_llm().with_structured_output(Quiz)
+    llm = Config.get_gemini_llm().with_structured_output(Quiz)
+    # llm = Config.get_ollama_llm().with_structured_output(Quiz)
     
     
 

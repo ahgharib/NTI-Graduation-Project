@@ -12,9 +12,13 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OllamaEmbeddings
 from chat_tools import summarize_history
 from search_agent import search_with_agent
+import requests
+import base64
+import time
 
 # --- SETUP & CONFIGURATION ---
 UPLOAD_DIR = "RAG/data"
+NOTES_OUTPUT_DIR = "notes_output"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Keep this for browser metadata, but we will add a visible title below
 st.set_page_config(layout="wide", page_title="Student Partner AI", page_icon="🎓")
@@ -165,6 +169,11 @@ st.markdown("""
         [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
         [data-testid="stFileUploader"] section { padding: 0.5rem; border-color: rgba(0, 240, 255, 0.2); }
         hr { margin-top: 0; margin-bottom: 2rem; border: none; height: 1px; background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.5), transparent); }
+        
+        /* --- !!! ADDED TO HIDE DEFAULT SIDEBAR NAV !!! --- */
+        [data-testid="stSidebarNav"] {
+            display: none !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -200,6 +209,11 @@ if "quiz_thread_id" not in st.session_state:
     st.session_state.quiz_thread_id = str(uuid.uuid4())
 if "last_quiz_result" not in st.session_state:
     st.session_state.last_quiz_result = None
+# NEW SESSION STATE FOR GENERATED CONTENT
+if "generated_video" not in st.session_state: 
+    st.session_state.generated_video = None
+if "generated_notes" not in st.session_state:
+    st.session_state.generated_notes = []
 
 # --- FUNCTIONS ---
 def switch_view(view_name):
@@ -271,6 +285,71 @@ def doc_modal():
                 st.session_state.file_vectorstore = FAISS.from_documents(file_docs, embeddings)
             st.success("✅ Documents Indexed Successfully!")
             st.rerun()
+
+
+@st.dialog("Generate Study Video")
+def video_modal():
+    st.caption("Generate an AI video based on a topic.")
+    with st.form("video_form"):
+        video_topic = st.text_input("Topic for video", placeholder="e.g. Transformers")
+        submit_video = st.form_submit_button("Generate Video", type="primary")
+        
+        if submit_video and video_topic:
+            server_url = "https://9000-01kdwpt8sdbpx4p6pnre63abf7.cloudspaces.litng.ai"
+            with st.spinner("🎬 Starting video generation..."):
+                try:
+                    r = requests.post(f"{server_url}/generate", json={"topic": video_topic}, timeout=60)
+                    r.raise_for_status()
+                    job_id = r.json()["job_id"]
+                    
+                    status_text = st.empty()
+                    while True:
+                        s = requests.get(f"{server_url}/jobs/{job_id}", timeout=60)
+                        js = s.json()
+                        status_text.write(f"Status: {js['status']} | Progress: {js['progress']}%")
+                        if js["status"] == "done": break
+                        if js["status"] == "error": raise Exception(js.get("error"))
+                        time.sleep(5)
+                    
+                    # Download
+                    video_path = f"video_{job_id}.mp4"
+                    with requests.get(f"{server_url}/jobs/{job_id}/download", stream=True) as dl:
+                        with open(video_path, "wb") as f:
+                            for chunk in dl.iter_content(chunk_size=1024*1024): f.write(chunk)
+                    
+                    st.session_state.generated_video = video_path
+                    st.success("Video Ready!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Generation failed: {e}")
+
+@st.dialog("Generate Visual Notes")
+def notes_modal():
+    st.caption("Create summarized visual pages for a topic.")
+    with st.form("notes_form"):
+        notes_topic = st.text_input("Topic for notes", placeholder="e.g. FastAPI Basics")
+        submit_notes = st.form_submit_button("Generate Notes", type="primary")
+        
+        if submit_notes and notes_topic:
+            cloud_url = "https://8000-01kdw6hxxpw7z5gt5aw3tn37am.cloudspaces.litng.ai/generate"
+            with st.spinner("🎨 Designing your notes..."):
+                try:
+                    response = requests.post(cloud_url, json={"topic": notes_topic, "max_pages": 1}, timeout=600)
+                    if response.status_code == 200:
+                        data = response.json()
+                        saved_paths = []
+                        for i, img_b64 in enumerate(data["images"]):
+                            path = os.path.join(NOTES_OUTPUT_DIR, f"note_{int(time.time())}_{i}.png")
+                            with open(path, "wb") as f:
+                                f.write(base64.b64decode(img_b64))
+                            saved_paths.append(path)
+                        st.session_state.generated_notes = saved_paths
+                        st.success("Notes generated!")
+                        st.rerun()
+                    else:
+                        st.error(f"Error: {response.text}")
+                except Exception as e:
+                    st.error(f"Failed: {e}")
 
 # --- SIDEBAR (FIXED) ---
 with st.sidebar:
@@ -422,6 +501,16 @@ if st.session_state.view_mode == "Dashboard":
         # CHAT SECTION
         st.divider()
         st.subheader("💬 Study Assistant")
+
+        # DISPLAY GENERATED CONTENT IN CHAT AREA
+        if st.session_state.generated_video:
+            with st.expander("🎬 Generated Video", expanded=True):
+                st.video(st.session_state.generated_video)
+        
+        if st.session_state.generated_notes:
+            with st.expander("🎨 Generated Notes", expanded=True):
+                for img_path in st.session_state.generated_notes:
+                    st.image(img_path, use_container_width=True)
         
         selected_ms_text = ""
         if st.session_state.plan_json and st.session_state.clicked_node:
@@ -440,7 +529,7 @@ if st.session_state.view_mode == "Dashboard":
                     st.write("🔍 Researching...")
 
         # Toolbar Buttons (Responsive)
-        tool_c1, tool_c2, tool_c3 = st.columns(3)
+        tool_c1, tool_c2, tool_c3, tool_c4, tool_c5 = st.columns(5)
         with tool_c1:
             if st.button("🎤 Speech", help="Voice Input", use_container_width=True):
                 st.toast("Voice input coming soon!")
@@ -450,6 +539,12 @@ if st.session_state.view_mode == "Dashboard":
         with tool_c3:
             if st.button("📂 Upload", help="Upload Docs", use_container_width=True):
                 doc_modal()
+        with tool_c4:
+            if st.button("🎬 Video", help="Generate AI Video", use_container_width=True):
+                video_modal()
+        with tool_c5:
+            if st.button("🎨 Notes", help="Generate Visual Notes", use_container_width=True):
+                notes_modal()
 
         user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
         

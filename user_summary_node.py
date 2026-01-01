@@ -106,6 +106,7 @@ Task:
 - Use only the information in the question and the correct answer.
 - Avoid adding any external facts or making assumptions not in the question.
 - Keep it concise, clear, and helpful (1-2 sentences).
+- Don't use any introductions or Hey there, be direct and to the point.
 
 Question:
 {question}
