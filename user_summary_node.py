@@ -178,6 +178,7 @@ def user_summary_node(state):
     # -------------------------
     debug("Invoking LLM for summary generation")
     llm = Config.get_ollama_llm()
+    # llm = Config.get_groq_llm() # Alternative LLM option
 
     prompt = f"""
     You are an educational analyst.

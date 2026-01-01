@@ -11,11 +11,83 @@
 # from langchain_community.vectorstores import FAISS
 # from langchain_community.embeddings import OllamaEmbeddings
 # from chat_tools import summarize_history
-# from search_agent import search_with_agent  # Import the search agent
+# from search_agent import search_with_agent
 
+# # --- SETUP & CONFIGURATION ---
 # UPLOAD_DIR = "RAG/data"
 # os.makedirs(UPLOAD_DIR, exist_ok=True)
-# st.set_page_config(layout="wide", page_title="AI Planner Agent")
+# st.set_page_config(layout="wide", page_title="Student Partner", page_icon="🎓")
+
+# # --- DARK MODE CSS STYLING ---
+# st.markdown("""
+#     <style>
+#         /* 1. Global Dark Theme & Fonts */
+#         .stApp {
+#             background-color: #0e1117;
+#             color: #e0e0e0;
+#             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+#         }
+        
+#         /* 2. Headers */
+#         h1, h2, h3, h4 { color: #ffffff !important; font-weight: 600; }
+#         p, .stMarkdown, .stText { color: #cfd8dc !important; line-height: 1.6; }
+        
+#         /* 3. Panel Containers (Scrollable areas) */
+#         [data-testid="stVerticalBlockBorderWrapper"] {
+#             background-color: #1a1c24; 
+#             border-radius: 12px;
+#             border: 1px solid #2d3748;
+#             padding: 1rem;
+#             margin-bottom: 1rem;
+#         }
+        
+#         /* 4. Sidebar */
+#         [data-testid="stSidebar"] {
+#             background-color: #15171e;
+#             border-right: 1px solid #2d3748;
+#         }
+        
+#         /* 5. Buttons */
+#         .stButton > button {
+#             border-radius: 8px;
+#             font-weight: 500;
+#             border: 1px solid #4a5568;
+#             background-color: #2d3748;
+#             color: #e2e8f0;
+#         }
+#         .stButton > button:hover {
+#             border-color: #63b3ed;
+#             color: #ffffff;
+#             background-color: #3182ce;
+#         }
+#         /* Primary Button Style */
+#         .stButton > button[kind="primary"] {
+#             background-color: #3182ce;
+#             border-color: #3182ce;
+#             color: white;
+#         }
+
+#         /* 6. Chat Bubbles */
+#         [data-testid="stChatMessage"] {
+#             background-color: transparent;
+#             padding: 0.5rem 1rem;
+#             border-radius: 8px;
+#         }
+#         [data-testid="stChatMessage"][data-testid="stChatMessageUser"] {
+#             background-color: #2d3748;
+#         }
+
+#         /* 7. Hide default file uploader junk */
+#         [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
+        
+#         /* 8. Expander Styling */
+#         .streamlit-expanderHeader {
+#             background-color: #1a1c24;
+#             color: #e2e8f0;
+#             border-radius: 8px;
+#         }
+#     </style>
+# """, unsafe_allow_html=True)
 
 # # --- SESSION STATE INITIALIZATION ---
 # if "plan_json" not in st.session_state:
@@ -26,21 +98,19 @@
 #     st.session_state.editor_chat_history = []
 # if "clicked_node" not in st.session_state:
 #     st.session_state.clicked_node = None
-# if "new_chat_input" not in st.session_state:
-#     st.session_state.new_chat_input = ""
 # if "uploaded_docs" not in st.session_state:
 #     st.session_state.uploaded_docs = {}
 # if "vectorstore" not in st.session_state:
-#     st.session_state.vectorstore = None  # chunk summaries
+#     st.session_state.vectorstore = None 
 # if "file_vectorstore" not in st.session_state:
-#     st.session_state.file_vectorstore = None # file summaries
+#     st.session_state.file_vectorstore = None
 #     st.session_state.vectorstore = None
 # if "search_query" not in st.session_state:
 #     st.session_state.search_query = ""
 # if "is_searching" not in st.session_state:
 #     st.session_state.is_searching = False
 # if "active_quiz" not in st.session_state:
-#     st.session_state.active_quiz = None  # stores Quiz object
+#     st.session_state.active_quiz = None 
 # if "quiz_answers" not in st.session_state:
 #     st.session_state.quiz_answers = {}
 # if "quiz_submitted" not in st.session_state:
@@ -48,14 +118,15 @@
 # if "quiz_thread_id" not in st.session_state:
 #     st.session_state.quiz_thread_id = str(uuid.uuid4())
 
+# # --- FUNCTIONS ---
 
 # def select_milestone(node_id):
 #     st.session_state.clicked_node = node_id
 
-# def perform_search():
-#     """Execute search and update chat history."""
-#     if st.session_state.search_query.strip():
-#         # Get the context from selected milestone
+# def perform_search_logic(query):
+#     """Refactored to be called from the modal."""
+#     if query.strip():
+#         # Get context
 #         context = ""
 #         if st.session_state.clicked_node and st.session_state.plan_json:
 #             ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
@@ -63,109 +134,75 @@
 #             if ms_data:
 #                 context = ms_data['title']
         
-#         # Add user message to chat history
-#         user_message = f"🔍 Search: {st.session_state.search_query}"
+#         # Update history
+#         user_message = f"🔍 Search: {query}"
 #         st.session_state.chat_history.append({"role": "user", "content": user_message})
-        
-#         # Set searching flag
 #         st.session_state.is_searching = True
         
-#         # Perform the search
 #         try:
-#             with st.spinner("Searching web and YouTube..."):
-#                 search_result = search_with_agent(
-#                     query=st.session_state.search_query,
-#                     context=context
-#                 )
-            
-#             # Add search result to chat history
-#             st.session_state.chat_history.append({
-#                 "role": "ai", 
-#                 "content": search_result
-#             })
-            
+#             # Logic runs here, wrapped by spinner in the caller function
+#             search_result = search_with_agent(query=query, context=context)
+#             st.session_state.chat_history.append({"role": "ai", "content": search_result})
 #         except Exception as e:
-#             error_msg = f"Search failed: {str(e)}"
-#             st.session_state.chat_history.append({"role": "ai", "content": error_msg})
+#             st.session_state.chat_history.append({"role": "ai", "content": f"Search failed: {str(e)}"})
         
-#         # Reset search state
 #         st.session_state.is_searching = False
 #         st.session_state.search_query = ""
+
+# # --- MODALS (DIALOGS) ---
+
+# @st.dialog("Research Assistant")
+# def search_modal():
+#     st.caption("Ask a research question using the AI agent.")
+#     with st.form("search_form"):
+#         query = st.text_input("Enter topic to research...", placeholder="e.g. Best practices for REST APIs")
+#         submit_search = st.form_submit_button("Start Search")
         
-#         # Rerun to update UI
-#         st.rerun()
+#         if submit_search and query:
+#             with st.spinner("🔎 Researching topic... this may take a moment"):
+#                 perform_search_logic(query)
+#             st.rerun()
 
-# # --- SIDEBAR ---
-# with st.sidebar:
-#     st.header("Planner Settings")
-#     user_goal = st.text_input("What do you want to learn?", "Python Backend Development")
+# @st.dialog("Knowledge Base")
+# def doc_modal():
+#     st.caption("Upload documents to provide context for the AI.")
     
-#     # Custom CSS to hide the box and style the button
-#     st.markdown("""
-#         <style>
-#             [data-testid="stFileUploader"] section {
-#                 padding: 0 !important;
-#             }
-#             [data-testid="stFileUploaderDropzoneInstructions"],
-#             [data-testid="stFileUploaderDropzone"] > div:first-child,
-#             [data-testid="stFileUploaderDeleteBtn"] {
-#                 display: none !important;
-#             }
-#             [data-testid="stFileUploaderDropzone"] {
-#                 border: none !important;
-#                 background: transparent !important;
-#                 padding: 0 !important;
-#                 margin: 0 !important;
-#                 min-height: 0px !important;
-#             }
-#             [data-testid="stFileUploaderDropzone"] button {
-#                 width: 45px !important;
-#                 height: 45px !important;
-#                 border-radius: 8px !important;
-#                 color: transparent !important; 
-#                 overflow: hidden !important;
-#                 position: relative !important;
-#                 display: flex !important;
-#                 align-items: center !important;
-#                 justify-content: center !important;
-#                 margin-top: 5px !important;
-#             }
-#             [data-testid="stFileUploaderDropzone"] button * {
-#                 display: none !important;
-#             }
-#             [data-testid="stFileUploaderDropzone"] button::after {
-#                 content: "📂";
-#                 display: block !important;
-#                 color: white !important; 
-#                 font-size: 20px !important;
-#                 position: absolute !important;
-#                 left: 50% !important;
-#                 top: 50% !important;
-#                 transform: translate(-50%, -50%) !important;
-#                 visibility: visible !important;
-#             }
-#         </style>
-#     """, unsafe_allow_html=True)
+#     st.markdown("##### 📄 Context Documents")
+#     uploaded_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
+    
+#     if uploaded_docs:
+#         if st.button("Process & Index Documents", use_container_width=True, type="primary"):
+#             with st.spinner("Indexing Knowledge Base..."):
+#                 for uploaded_doc in uploaded_docs:
+#                     if uploaded_doc.name not in st.session_state.uploaded_docs:
+#                         file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
+#                         with open(file_path, "wb") as f:
+#                             f.write(uploaded_doc.getbuffer())
+#                         st.session_state.uploaded_docs[uploaded_doc.name] = file_path
 
-#     col_gen, col_up = st.columns([4, 1])
-#     with col_gen:
-#         generate_clicked = st.button("Generate Roadmap", use_container_width=True)
-#     with col_up:
-#         uploaded_file = st.file_uploader("collapsed", type=["json"], label_visibility="collapsed", key="file_up_icon")
+#                 embeddings = OllamaEmbeddings(model="nomic-embed-text")
+#                 chunk_docs = []
+#                 file_docs = []
+#                 for path in st.session_state.uploaded_docs.values():
+#                     chunks, file_summary = ingest_pdf(path)
+#                     chunk_docs.extend(chunks)
+#                     file_docs.append(file_summary)
 
-#     if uploaded_file is not None:
-#         if "last_uploaded_file" not in st.session_state or st.session_state.last_uploaded_file != uploaded_file.name:
-#             try:
-#                 uploaded_data = json.load(uploaded_file)
-#                 st.session_state.plan_json = uploaded_data
-#                 st.session_state.chat_history.append({"role": "ai", "content": f"Loaded: {uploaded_file.name}"})
-#                 st.session_state.last_uploaded_file = uploaded_file.name
-#                 st.rerun()
-#             except Exception as e:
-#                 st.error(f"Error: {e}")
+#                 st.session_state.vectorstore = FAISS.from_documents(chunk_docs, embeddings)
+#                 st.session_state.file_vectorstore = FAISS.from_documents(file_docs, embeddings)
+#             st.success("✅ Documents Indexed Successfully!")
+#             st.rerun()
 
-#     if generate_clicked:
-#         with st.spinner("AI is thinking..."):
+# # --- SIDEBAR (FIXED) ---
+# with st.sidebar:
+#     st.header("🎓 AI Planner")
+    
+#     st.markdown("### 🎯 Your Goal")
+#     user_goal = st.text_input("Goal", "Python Backend Development", label_visibility="collapsed", placeholder="E.g., Learn React")
+    
+#     # 1. GENERATE BUTTON
+#     if st.button("🚀 Generate New Roadmap", use_container_width=True, type="primary"):
+#         with st.spinner("Generative AI is thinking..."):
 #             initial_state = PlanState(
 #                 user_request=user_goal, attempt_count=0, messages=[], 
 #                 current_plan={}, feedback=None, search_context="", 
@@ -173,386 +210,346 @@
 #             )
 #             result = app_graph.invoke(initial_state)
 #             if result.get("error"):
-#                 st.error(f"System Error: {result['error']}")
+#                 st.error(f"Error: {result['error']}")
 #             else:
 #                 st.session_state.plan_json = result["current_plan"]
-#                 st.session_state.chat_history.append({"role": "ai", "content": "Roadmap Generated!"})
+#                 st.session_state.chat_history.append({"role": "ai", "content": "Roadmap Generated Successfully!"})
 #                 st.rerun()
+    
+#     # 2. UPLOAD SECTION
+#     st.write("") # Spacer
+#     st.caption("OR")
+#     with st.expander("📂 Load Existing Plan"):
+#         uploaded_file = st.file_uploader("Upload JSON", type=["json"], label_visibility="collapsed")
+#         if uploaded_file is not None:
+#             if "last_uploaded_file" not in st.session_state or st.session_state.last_uploaded_file != uploaded_file.name:
+#                 try:
+#                     uploaded_data = json.load(uploaded_file)
+#                     st.session_state.plan_json = uploaded_data
+#                     st.session_state.chat_history.append({"role": "ai", "content": f"Loaded plan: {uploaded_file.name}"})
+#                     st.session_state.last_uploaded_file = uploaded_file.name
+#                     st.rerun()
+#                 except Exception as e:
+#                     st.error(f"File Error: {e}")
 
-#     if st.session_state.get("plan_json"):
-#         st.divider()
-#         json_str = json.dumps(st.session_state.plan_json, indent=2)
+#     st.divider()
+
+#     # 3. NAVIGATION SECTION
+#     st.markdown("### 📍 Navigation")
+    
+#     if st.session_state.plan_json:
+#         # Download Button
 #         st.download_button(
-#             label="Download Roadmap (JSON)",
-#             data=json_str,
-#             file_name="roadmap.json",
-#             mime="application/json",
+#             "📥 Export JSON", 
+#             data=json.dumps(st.session_state.plan_json, indent=2), 
+#             file_name="roadmap.json", 
+#             mime="application/json", 
 #             use_container_width=True
 #         )
+        
+#         st.write("") # Spacer
 
-#     if st.session_state.plan_json:
-#         st.divider()
-#         st.subheader("Milestones List")
-#         for ms in st.session_state.plan_json.get("milestones", []):
-#             ms_id = ms.get("id")
-#             is_selected = st.session_state.clicked_node == ms_id
-#             button_label = f"📍 {ms['title']}" if is_selected else ms['title']
-#             if st.button(button_label, key=f"btn_{ms_id}", use_container_width=True):
-#                 select_milestone(ms_id)
-#                 st.rerun()
+#         # Scrollable Navigation List
+#         with st.container(height=400):
+#             milestones = st.session_state.plan_json.get("milestones", [])
+#             for ms in milestones:
+#                 ms_id = ms.get("id")
+#                 is_selected = st.session_state.clicked_node == ms_id
+                
+#                 # Visual indicator for selection
+#                 icon = "🔵" if is_selected else "⚪"
+#                 label = ms['title']
+                
+#                 # Button for each milestone
+#                 if st.button(f"{icon} {label}", key=f"nav_{ms_id}", use_container_width=True):
+#                     select_milestone(ms_id)
+#                     st.rerun()
+#     else:
+#         st.info("Generate a plan to see your milestones here.")
 
 # # --- MAIN UI LAYOUT ---
-# col1, col2 = st.columns([3, 1.2])
+# col1, col2 = st.columns([2.5, 1.2])
 
+# # LEFT COLUMN: Graph & Chat
 # with col1:
-#     tabs = st.tabs(["🤖 Assistant", "📝 Quiz"])
-#     with tabs[0]:
-#         st.subheader("Interactive Roadmap")
-#         if st.session_state.plan_json:
+#     # 1. Top Section: Visual Graph
+#     if st.session_state.plan_json:
+#         with st.expander("🗺️ Interactive Roadmap View", expanded=True):
 #             nodes = []
 #             edges = []
 #             milestones = st.session_state.plan_json.get("milestones", [])
 #             for i, ms in enumerate(milestones):
 #                 ms_id = ms.get("id", f"m{i}")
-                
-#                 # --- COLOR LOGIC EDITED HERE ---
-#                 # Default node color is Red. If selected, it becomes Blue.
 #                 is_selected = st.session_state.clicked_node == ms_id
-#                 node_color = "blue" if is_selected else "red"
-#                 node_size = 35 if is_selected else 25
+                
+#                 # --- VISUALS ---
+#                 node_color = "#2563eb" if is_selected else "#dc2626" 
+#                 node_size = 30
+                
+#                 step_number = str(i + 1)
                 
 #                 nodes.append(Node(
 #                     id=ms_id, 
-#                     label=ms["title"], 
+#                     label=step_number,      
+#                     title=ms["title"],      
+#                     shape="circle",         
 #                     size=node_size, 
 #                     color=node_color,
-#                     font={'color': 'green'}  # LABEL COLOR: Green
+#                     # --- FONT CONFIGURATION FOR CODING STYLE ---
+#                     font={
+#                         'color': 'white',
+#                         'size': 16,
+#                         'face': 'Courier New, Courier, monospace', 
+#                         'align': 'center',
+#                         'bold': True
+#                     },
+#                     borderWidth=2,
+#                     borderWidthSelected=4
 #                 ))
                 
 #                 if i > 0:
 #                     prev_id = milestones[i-1].get("id", f"m{i-1}")
-#                     edges.append(Edge(source=prev_id, target=ms_id, type="CURVE_SMOOTH"))
+#                     edges.append(Edge(source=prev_id, target=ms_id, type="CURVE_SMOOTH", arrows="to", color="#6b7280"))
 
-#             # Config updated to ensure label colors and highlighting work as expected
 #             config = AgConfig(
-#                 width=700, 
-#                 height=400, 
-#                 directed=True,
-#                 physics=False, 
-#                 nodeHighlightBehavior=True,
-#                 highlightColor="blue"
+#                 width=None, 
+#                 height=300, 
+#                 directed=True, 
+#                 physics=True, 
+#                 hierarchical=False, 
+#                 nodeHighlightBehavior=True, 
+#                 highlightColor="#60a5fa", 
+#                 backgroundColor="#0e1117",
+#                 physicsOptions={
+#                     'stabilization': {'enabled': True, 'iterations': 1000},
+#                     'barnesHut': {
+#                         'gravitationalConstant': -2000,
+#                         'centralGravity': 0.3,
+#                         'springLength': 95,
+#                         'springConstant': 0.04,
+#                         'damping': 0.09,
+#                         'avoidOverlap': 0.1
+#                     }
+#                 }
 #             )
-            
 #             returned_id = agraph(nodes=nodes, edges=edges, config=config)
 #             if returned_id and returned_id != st.session_state.clicked_node:
 #                 st.session_state.clicked_node = returned_id
 #                 st.rerun()
 
-#         st.divider()
-#         st.subheader("🤖 Smart Assistant")
-        
-#         selected_ms_text = ""
-#         if st.session_state.plan_json and st.session_state.clicked_node:
-#             ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
-#                         if m.get("id") == st.session_state.clicked_node), None)
-#             if ms_data:
-#                 st.info(f"Focused on: **{ms_data['title']}**")
-#                 selected_ms_text = f"Title: {ms_data['title']}. Description: {ms_data['description']}."
+#     # 2. Bottom Section: Chat Interface
+#     st.subheader("💬 Study Assistant")
+    
+#     # Context Banner
+#     selected_ms_text = ""
+#     if st.session_state.plan_json and st.session_state.clicked_node:
+#         ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
+#         if ms_data:
+#             st.caption(f"Currently focused on: **{ms_data['title']}**")
+#             selected_ms_text = f"Title: {ms_data['title']}. Description: {ms_data['description']}."
 
-#         chat_box = st.container(height=500, border=True)
-#         with chat_box:
-#             for msg in st.session_state.chat_history:
-#                 with st.chat_message(msg["role"]):
-#                     st.write(msg["content"])
-            
-#             # Show loading animation when searching
-#             if st.session_state.is_searching:
-#                 with st.chat_message("assistant"):
-#                     st.markdown(
-#                         """
-#                         <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 20px;">
-#                             <img src="https://i.gifer.com/ZKZg.gif" width="60" />
-#                         </div>
-#                         """, 
-#                         unsafe_allow_html=True
-#                     )
-
-#         # UPDATED: Search input and buttons layout
-#         search_col, web_col, yt_col, doc_col = st.columns([0.7, 0.1, 0.1, 0.1])
-        
-#         with search_col:
-#             # Search input that triggers on Enter
-#             search_query = st.text_input(
-#                 "Search query...",
-#                 value=st.session_state.search_query,
-#                 key="search_input",
-#                 on_change=perform_search,
-#                 label_visibility="collapsed",
-#                 placeholder="Search the web and YouTube..."
-#             )
-#             if search_query:
-#                 st.session_state.search_query = search_query
-        
-#         with web_col:
-#             # Search button
-#             if st.button("🔍", use_container_width=True, help="Search the web and YouTube"):
-#                 if st.session_state.search_query:
-#                     perform_search()
-#                 else:
-#                     st.warning("Please enter a search query first")
-        
-#         with yt_col:
-#             st.button("📺", use_container_width=True, help="Direct YouTube search (coming soon)")
-        
-#         with doc_col:
-#             uploaded_docs = st.file_uploader(
-#                 "📄",
-#                 type=["pdf"],
-#                 accept_multiple_files=True,
-#                 label_visibility="collapsed",
-#                 help="Upload documents to use as reference"
-#             )
-#             # if st.session_state.uploaded_docs:
-#             #     for name in st.session_state.uploaded_docs:
-#             #         st.caption(f"• {name}")
-
-#         if uploaded_docs:
-#             for uploaded_doc in uploaded_docs:
-
-#                 if uploaded_doc.name in st.session_state.uploaded_docs:
-#                     continue  # already uploaded this session
-
-#                 file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
-
-#                 with open(file_path, "wb") as f:
-#                     f.write(uploaded_doc.getbuffer())
-                
-#                 st.session_state.uploaded_docs[uploaded_doc.name] = file_path
-
-#         if st.button("📚 Index Documents"):
-#             embeddings = OllamaEmbeddings(model="nomic-embed-text")
-
-#             chunk_docs = []
-#             file_docs = []
-
-#             for path in st.session_state.uploaded_docs.values():
-#                 chunks, file_summary = ingest_pdf(path)
-#                 chunk_docs.extend(chunks)
-#                 file_docs.append(file_summary)
-
-#             st.session_state.vectorstore = FAISS.from_documents(
-#                 chunk_docs, embeddings
-#             )
-
-#             st.session_state.file_vectorstore = FAISS.from_documents(
-#                 file_docs, embeddings
-#             )
-
-#             st.success("Documents indexed successfully")
-
-#         # Regular chat input (separate from search)
-#         user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
-
-#         if user_input:
-#             st.session_state.chat_history.append({"role": "user", "content": user_input})
-#             with chat_box:
-#                 st.chat_message("user").write(user_input)
-
-#             with st.spinner("Assistant is working..."):
-#                 history_context = ""
-#                 if len(st.session_state.chat_history) > 1:
-#                     previous_turns = st.session_state.chat_history[:-1]
-#                     history_context = summarize_history(previous_turns)
-                    
-#                 initial_chat_state = {
-#                     "user_prompt": user_input,
-#                     "messages": [],
-#                     "plan_actions": [],
-#                     "plan_instructions": [],
-#                     "research_memory": [],
-#                     "raw_data_storage": [],
-#                     "execution_log": [],
-#                     "validation_errors": [],
-#                     "refinement_attempts": 0,
-#                     "plan_data": st.session_state.plan_json,
-#                     "selected_milestone_context": selected_ms_text,
-#                     "conversation_summary": history_context
-#                 }
-
-#                 try:
-#                     for chunk in study_buddy_graph.stream(initial_chat_state, stream_mode="updates",  config={"configurable": {"thread_id": st.session_state.quiz_thread_id}}):
-#                         if "orchestrator" in chunk:
-#                             plan = chunk["orchestrator"]
-#                             actions = plan.get("plan_actions", [])
-#                             if "END" in actions:
-#                                 with chat_box:
-#                                     st.chat_message("ai").write("I cannot handle this request based on my capabilities.")
-#                                     st.session_state.chat_history.append({"role": "ai", "content": "I cannot handle this request."})
-#                             else:
-#                                 plan_msg = f"🔍 **Plan:** {', '.join(actions)}"
-#                                 with chat_box: st.caption(plan_msg)
-
-#                         if "explain_node" in chunk:
-#                             response_messages = chunk["explain_node"].get("messages", [])
-#                             for msg in response_messages:
-#                                 with chat_box: st.chat_message("ai").write(msg.content)
-#                                 st.session_state.chat_history.append({"role": "ai", "content": msg.content})
-
-#                         if "quiz_generator" in chunk:
-#                             quiz_data = chunk["quiz_generator"].get("quiz_output")
-#                             if quiz_data:
-#                                 st.session_state.active_quiz = quiz_data
-#                                 st.session_state.quiz_answers = {}
-#                                 st.session_state.quiz_submitted = False
-
-#                                 st.session_state.chat_history.append({
-#                                     "role": "ai",
-#                                     "content": "📝 A quiz has been generated. Open the **Quiz** tab to start."
-#                                 })
-
-                        
-#                         if "summarizer" in chunk:
-#                             response_messages = chunk["summarizer"].get("messages", [])
-#                             for msg in response_messages:
-#                                 with chat_box: st.chat_message("ai").write(msg.content)
-#                                 st.session_state.chat_history.append({"role": "ai", "content": msg.content})
-#                 except Exception as e:
-#                     st.error(f"Pipeline Error: {str(e)}")
-#     with tabs[1]:
-#         st.subheader("📝 Quiz")
-
-#         quiz = st.session_state.active_quiz
-
-#         if not quiz:
-#             st.info("No active quiz yet. Ask the assistant to generate one.")
-#         else:
-#             st.markdown(f"### Topic: {quiz.topic}")
-#             st.caption(f"Level: {quiz.proficiency_level}")
-
-#             # ---------- MCQs ----------
-#             st.markdown("## Multiple Choice Questions")
-#             for idx, q in enumerate(quiz.mcq_questions):
-#                 answer = st.radio(
-#                     q.question,
-#                     q.options,
-#                     key=f"mcq_{idx}",
-#                     index=None
-#                 )
-#                 st.session_state.quiz_answers[f"mcq_{idx}"] = answer
-
-#             # ---------- Article Questions ----------
-#             if quiz.article_questions:
-#                 st.markdown("## Article Questions")
-#                 for idx, q in enumerate(quiz.article_questions):
-#                     answer = st.text_area(
-#                         q.question,
-#                         key=f"article_{idx}"
-#                     )
-#                     st.session_state.quiz_answers[f"article_{idx}"] = answer
-
-#             # ---------- Coding Questions ----------
-#             if quiz.coding_questions:
-#                 st.markdown("## Coding Questions")
-#                 for idx, q in enumerate(quiz.coding_questions):
-#                     st.markdown(f"**{q.question}**")
-#                     answer = st.text_area(
-#                         "Your code:",
-#                         height=200,
-#                         key=f"code_{idx}"
-#                     )
-#                     st.session_state.quiz_answers[f"code_{idx}"] = answer
-
-#             # ---------- SUBMIT ----------
-#             if st.button("✅ Submit Quiz"):
-#                 submission = {
-#                     "quiz": quiz.model_dump(),
-#                     "user_answers": st.session_state.quiz_answers
-#                 }
-
-
-
-#                 filename = f"quiz_submission_{uuid.uuid4().hex}.json"
-#                 save_path = os.path.join("quiz_submissions", filename)
-#                 os.makedirs("quiz_submissions", exist_ok=True)
-
-#                 with open(save_path, "w") as f:
-#                     json.dump(submission, f, indent=2)
-
-#                 st.session_state.quiz_submitted = True
-#                 st.success(f"Quiz submitted successfully!\nSaved as `{filename}`")
-#                 with st.spinner("Submitting quiz for evaluation..."):
-#                     events = study_buddy_graph.stream(
-#                         None,
-#                         config={
-#                             "configurable": {
-#                                 "thread_id": st.session_state.quiz_thread_id,
-#                                 "resume": submission
-#                             }
-#                         }
-#                     )
-
-#                     result = None
-#                     for event in events:
-#                         if isinstance(event, dict):
-#                             result = event
-#                 # Optional: display summary immediately if returned
-#                 if result and "user_profile_summary" in result:
-#                     summary = result["user_profile_summary"]
-#                     st.subheader("📊 Performance Summary")
-#                     st.metric("Accuracy", f"{summary['accuracy']}%")
-#                     st.markdown(summary["summary_text"])
-
-
-# with col2:
-#     st.subheader("🛠️ Roadmap Manager")
-#     editor_container = st.container(height=300, border=True)
-#     with editor_container:
-#         for msg in st.session_state.editor_chat_history:
+#     # Chat History Container (Fixed height for scrolling)
+#     chat_container = st.container(height=500)
+#     with chat_container:
+#         for msg in st.session_state.chat_history:
 #             with st.chat_message(msg["role"]):
 #                 st.write(msg["content"])
-            
-#     editor_input = st.chat_input("Update plan structure...", key="editor_input")
-#     if editor_input:
-#         st.session_state.editor_chat_history.append({"role": "user", "content": editor_input})
-#         with st.spinner("Updating Plan..."):
-#             state_update = PlanState(
-#                 current_plan=st.session_state.plan_json,
-#                 messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.editor_chat_history],
-#                 user_request=user_goal,
-#                 ui_selected_node=st.session_state.clicked_node,
-#                 attempt_count=0, feedback=None, search_context="", raw_output="", error=None
-#             )
-#             result = editor_graph.invoke(state_update)
-#             if not result.get("error"):
-#                 st.session_state.plan_json = result["current_plan"]
-#                 st.session_state.editor_chat_history.append({"role": "ai", "content": "Plan updated!"})
-#                 st.rerun()
+#         if st.session_state.is_searching:
+#             with st.chat_message("assistant"):
+#                 st.write("🔍 Researching...")
+
+#     # Chat Tools Toolbar (Now with 3 buttons)
+#     # Adjust column ratios to fit 3 buttons nicely
+#     tool_c1, tool_c2, tool_c3, tool_space = st.columns([0.15, 0.15, 0.15, 0.55])
     
-#     st.divider()
+#     with tool_c1:
+#         if st.button("🎤 Speech", help="Voice Input", use_container_width=True):
+#             st.toast("Voice input coming soon!")
+#     with tool_c2:
+#         if st.button("🔍 Search", help="Open Research Agent", use_container_width=True):
+#             search_modal()
+#     with tool_c3:
+#         if st.button("📂 Upload", help="Upload Documents", use_container_width=True):
+#             doc_modal()
 
-#     st.subheader("📝 Milestone Details")
-#     if st.session_state.clicked_node and st.session_state.plan_json:
-#         ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
-#                        if m.get("id") == st.session_state.clicked_node), None)
-#         if ms_data:
-#             st.markdown(f"### {ms_data['title']}")
-#             st.caption(f"Status: {ms_data['status'].upper()}")
-#             st.write(ms_data['description'])
+#     # Sticky Input
+#     user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
+
+#     if user_input:
+#         st.session_state.chat_history.append({"role": "user", "content": user_input})
+#         with chat_container:
+#             st.chat_message("user").write(user_input)
+
+#         with st.spinner("Processing..."):
+#             history_context = ""
+#             if len(st.session_state.chat_history) > 1:
+#                 history_context = summarize_history(st.session_state.chat_history[:-1])
+                
+#             initial_chat_state = {
+#                 "user_prompt": user_input,
+#                 "messages": [],
+#                 "plan_actions": [],
+#                 "plan_instructions": [],
+#                 "research_memory": [],
+#                 "raw_data_storage": [],
+#                 "execution_log": [],
+#                 "validation_errors": [],
+#                 "refinement_attempts": 0,
+#                 "plan_data": st.session_state.plan_json,
+#                 "selected_milestone_context": selected_ms_text,
+#                 "conversation_summary": history_context
+#             }
+
+#             try:
+#                 for chunk in study_buddy_graph.stream(initial_chat_state, stream_mode="updates", config={"configurable": {"thread_id": st.session_state.quiz_thread_id}}):
+#                     if "orchestrator" in chunk:
+#                         plan = chunk["orchestrator"]
+#                         actions = plan.get("plan_actions", [])
+#                         if "END" in actions:
+#                              st.session_state.chat_history.append({"role": "ai", "content": "I cannot handle this request."})
+#                         else:
+#                             with chat_container: st.caption(f"⚙️ Plan: {', '.join(actions)}")
+
+#                     if "explain_node" in chunk:
+#                         for msg in chunk["explain_node"].get("messages", []):
+#                             with chat_container: st.chat_message("ai").write(msg.content)
+#                             st.session_state.chat_history.append({"role": "ai", "content": msg.content})
+
+#                     if "quiz_generator" in chunk:
+#                         quiz_data = chunk["quiz_generator"].get("quiz_output")
+#                         if quiz_data:
+#                             st.session_state.active_quiz = quiz_data
+#                             st.session_state.quiz_answers = {}
+#                             st.session_state.quiz_submitted = False
+#                             msg_content = "📝 Quiz generated! Check the Quiz tab."
+#                             with chat_container: st.chat_message("ai").write(msg_content)
+#                             st.session_state.chat_history.append({"role": "ai", "content": msg_content})
+
+#                     if "summarizer" in chunk:
+#                          for msg in chunk["summarizer"].get("messages", []):
+#                             with chat_container: st.chat_message("ai").write(msg.content)
+#                             st.session_state.chat_history.append({"role": "ai", "content": msg.content})
+#             except Exception as e:
+#                 st.error(f"Error: {str(e)}")
+
+
+# # RIGHT COLUMN: Manager & Details
+# with col2:
+#     tabs = st.tabs(["📝 Details", "🛠️ Manager", "❓ Quiz"])
+    
+#     # TAB 1: Milestone Details
+#     with tabs[0]:
+#         st.subheader("Milestone Details")
+#         detail_container = st.container(height=650)
+#         with detail_container:
+#             if st.session_state.clicked_node and st.session_state.plan_json:
+#                 ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
+#                 if ms_data:
+#                     st.markdown(f"### {ms_data['title']}")
+#                     st.caption(f"Status: {ms_data['status'].upper()}")
+#                     st.info(ms_data['description'])
+#                     st.markdown("#### Tasks")
+#                     for task in ms_data.get("tasks", []):
+#                         icon = "✅" if ms_data['status'] == 'done' else "⬜"
+#                         st.markdown(f"**{icon} {task['name']}**")
+#                         st.caption(task['description'])
+#                         if task.get('resources'): st.markdown(f"📚 [Read]({task['resources']})")
+#                         if task.get('youtube'): st.markdown(f"📺 [Watch]({task['youtube']})")
+#                         st.divider()
+#             else:
+#                 st.info("Select a milestone from the sidebar or graph to view details.")
+
+#     # TAB 2: Roadmap Editor
+#     with tabs[1]:
+#         editor_chat_container = st.container(height=550)
+#         with editor_chat_container:
+#             # 1. EMPTY STATE
+#             if not st.session_state.editor_chat_history:
+#                 st.markdown("""
+#                 <div style="text-align: center; color: #94a3b8; margin-top: 40px;">
+#                     <div style="font-size: 3rem; opacity: 0.8;">🛠️</div>
+#                     <h3 style="color: #e2e8f0; margin: 10px 0;">Roadmap Manager</h3>
+#                     <p>How would you like to adjust your plan?</p>
+#                     <div style="display: grid; gap: 10px; margin-top: 20px;">
+#                         <div style="background: #1e293b; padding: 12px; border-radius: 8px; border: 1px solid #334155; font-size: 0.9rem;">
+#                             "Add a milestone for Docker basics"
+#                         </div>
+#                         <div style="background: #1e293b; padding: 12px; border-radius: 8px; border: 1px solid #334155; font-size: 0.9rem;">
+#                             "Remove the last step"
+#                         </div>
+#                     </div>
+#                 </div>
+#                 """, unsafe_allow_html=True)
             
-#             st.markdown("#### Tasks")
-#             for task in ms_data.get("tasks", []):
-#                 icon = "✅" if ms_data['status'] == 'done' else "⬜"
-#                 st.markdown(f"**{icon} {task['name']}**")
-#                 st.write(f"_{task['description']}_")
-#                 if task.get('resources'): st.markdown(f"📚 [Read Resource]({task['resources']})")
-#                 if task.get('youtube'): st.markdown(f"📺 [Watch Video]({task['youtube']})")
-#                 st.divider()
+#             # 2. RENDER MESSAGES
+#             for msg in st.session_state.editor_chat_history:
+#                 with st.chat_message(msg["role"]):
+#                     st.write(msg["content"])
+        
+#         # 3. INPUT FIELD
+#         editor_input = st.chat_input("Type instructions to modify plan...", key="editor_input")
+        
+#         if editor_input:
+#             st.session_state.editor_chat_history.append({"role": "user", "content": editor_input})
+            
+#             with st.spinner("AI is updating your roadmap structure..."):
+#                 state_update = PlanState(
+#                     current_plan=st.session_state.plan_json,
+#                     messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.editor_chat_history],
+#                     user_request=user_goal,
+#                     ui_selected_node=st.session_state.clicked_node,
+#                     attempt_count=0, feedback=None, search_context="", raw_output="", error=None
+#                 )
+#                 result = editor_graph.invoke(state_update)
+                
+#                 if not result.get("error"):
+#                     st.session_state.plan_json = result["current_plan"]
+#                     st.session_state.editor_chat_history.append({"role": "ai", "content": "✅ Plan updated successfully!"})
+#                     st.rerun()
+#                 else:
+#                     st.error(f"Failed to update: {result.get('error')}")
 
+#     # TAB 3: Quiz Interface
+#     with tabs[2]:
+#         st.subheader("Active Quiz")
+#         quiz_container = st.container(height=650)
+#         with quiz_container:
+#             quiz = st.session_state.active_quiz
+#             if not quiz:
+#                 st.info("Ask the Assistant to generate a quiz for a milestone!")
+#             else:
+#                 st.markdown(f"**Topic:** {quiz.topic}")
+                
+#                 with st.form("quiz_form"):
+#                     st.markdown("##### Multiple Choice")
+#                     for idx, q in enumerate(quiz.mcq_questions):
+#                         st.session_state.quiz_answers[f"mcq_{idx}"] = st.radio(q.question, q.options, key=f"mcq_{idx}", index=None)
+                    
+#                     if quiz.article_questions:
+#                         st.markdown("##### Short Answer")
+#                         for idx, q in enumerate(quiz.article_questions):
+#                             st.session_state.quiz_answers[f"article_{idx}"] = st.text_area(q.question, key=f"article_{idx}")
+                    
+#                     if quiz.coding_questions:
+#                         st.markdown("##### Coding Challenge")
+#                         for idx, q in enumerate(quiz.coding_questions):
+#                             st.write(q.question)
+#                             st.session_state.quiz_answers[f"code_{idx}"] = st.text_area("Code", height=150, key=f"code_{idx}")
 
-
-
-
-
+#                     if st.form_submit_button("Submit Quiz"):
+#                         submission = {"quiz": quiz.model_dump(), "user_answers": st.session_state.quiz_answers}
+#                         st.session_state.quiz_submitted = True
+#                         st.success("Submitted! Analyzing...")
+#                         events = study_buddy_graph.stream(None, config={"configurable": {"thread_id": st.session_state.quiz_thread_id, "resume": submission}})
+#                         for event in events:
+#                              if isinstance(event, dict) and "user_profile_summary" in event:
+#                                  st.session_state.last_quiz_result = event["user_profile_summary"]
+#                         st.rerun()
+                
+#                 if st.session_state.get("last_quiz_result"):
+#                     res = st.session_state.last_quiz_result
+#                     st.metric("Score", f"{res['accuracy']}%")
+#                     st.write(res["summary_text"])
 
 
 
@@ -576,80 +573,161 @@ from search_agent import search_with_agent
 # --- SETUP & CONFIGURATION ---
 UPLOAD_DIR = "RAG/data"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-st.set_page_config(layout="wide", page_title="AI Planner Agent", page_icon="🎓")
+# Keep this for browser metadata, but we will add a visible title below
+st.set_page_config(layout="wide", page_title="Student Partner AI", page_icon="🎓")
 
-# --- DARK MODE CSS STYLING ---
+# --- 🎨 FUTURE & MODERN CSS ---
 st.markdown("""
     <style>
-        /* 1. Global Dark Theme & Fonts */
+        /* 1. KEYFRAMES */
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(20px); filter: blur(10px); }
+            100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+        
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        /* Apply animation to main containers */
+        .block-container {
+            animation: fadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            /* Adjusted padding for new header structure */
+            padding-top: 2rem !important; 
+            padding-bottom: 3rem !important;
+        }
+
+        /* 2. GLOBAL THEME */
         .stApp {
-            background-color: #0e1117;
-            color: #e0e0e0;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        
-        /* 2. Headers */
-        h1, h2, h3, h4 { color: #ffffff !important; font-weight: 600; }
-        p, .stMarkdown, .stText { color: #cfd8dc !important; line-height: 1.6; }
-        
-        /* 3. Panel Containers (Scrollable areas) */
-        [data-testid="stVerticalBlockBorderWrapper"] {
-            background-color: #1a1c24; 
-            border-radius: 12px;
-            border: 1px solid #2d3748;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        /* 4. Sidebar */
-        [data-testid="stSidebar"] {
-            background-color: #15171e;
-            border-right: 1px solid #2d3748;
-        }
-        
-        /* 5. Buttons */
-        .stButton > button {
-            border-radius: 8px;
-            font-weight: 500;
-            border: 1px solid #4a5568;
-            background-color: #2d3748;
+            background: linear-gradient(-45deg, #050a14, #0f172a, #1a1235, #092230);
+            background-size: 400% 400%;
+            animation: gradientBG 20s ease infinite;
+            font-family: 'Inter', sans-serif;
             color: #e2e8f0;
+        }
+
+        /* 3. GLASS CARDS */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(0, 240, 255, 0.1); 
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        
+        [data-testid="stVerticalBlockBorderWrapper"]:hover {
+            border-color: rgba(0, 240, 255, 0.4);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.15), inset 0 0 10px rgba(0, 240, 255, 0.05); 
+            transform: translateY(-3px) scale(1.005);
+        }
+
+        /* 4. SIDEBAR STYLING */
+        [data-testid="stSidebar"] {
+            background-color: rgba(5, 7, 12, 0.95);
+            border-right: 1px solid rgba(0, 240, 255, 0.1);
+        }
+        /* Sidebar header specific style */
+        [data-testid="stSidebar"] h1 {
+            background: linear-gradient(to right, #00F0FF, #8A2BE2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800 !important;
+            font-size: 1.8rem !important;
+        }
+
+        /* 5. MAIN PAGE HEADERS */
+        /* Style for the main page title */
+        .main-header {
+            font-size: 3rem !important;
+            font-weight: 800 !important;
+            background: linear-gradient(to right, #E2E8F0, #00F0FF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0px !important;
+        }
+        /* Style for subtitles */
+        .sub-header {
+            color: #94a3b8 !important;
+            font-size: 1.2rem !important;
+            font-weight: 400 !important;
+            margin-top: 0px !important;
+        }
+
+        /* Standard headers */
+        h1, h2, h3, h4 { 
+            color: #F8FAFC !important; 
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* 6. MODERN BUTTONS */
+        .stButton > button {
+            border-radius: 12px;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background-color: rgba(30, 41, 59, 0.5);
+            color: #E2E8F0;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
         }
         .stButton > button:hover {
-            border-color: #63b3ed;
-            color: #ffffff;
-            background-color: #3182ce;
+            background-color: rgba(0, 240, 255, 0.1);
+            border-color: rgba(0, 240, 255, 0.3);
+            color: #00F0FF;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
         }
-        /* Primary Button Style */
         .stButton > button[kind="primary"] {
-            background-color: #3182ce;
-            border-color: #3182ce;
+            background: linear-gradient(90deg, #00C6FF 0%, #0072FF 100%);
+            border: none;
             color: white;
+            box-shadow: 0 4px 15px rgba(0, 114, 255, 0.3);
+        }
+        .stButton > button[kind="primary"]:hover {
+            box-shadow: 0 6px 25px rgba(0, 198, 255, 0.5);
         }
 
-        /* 6. Chat Bubbles */
-        [data-testid="stChatMessage"] {
-            background-color: transparent;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-        }
+        /* 7. CHAT & INPUTS */
         [data-testid="stChatMessage"][data-testid="stChatMessageUser"] {
-            background-color: #2d3748;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(0, 240, 255, 0.15);
+            border-radius: 12px;
+            backdrop-filter: blur(5px);
         }
+        [data-testid="stChatMessage"][data-testid="stChatMessageUser"] p { color: #00F0FF !important; }
+        .stTextInput > div > div > input, .stTextArea > div > div > textarea {
+            background-color: rgba(10, 14, 23, 0.8) !important;
+            border: 1px solid rgba(0, 240, 255, 0.1) !important;
+            border-radius: 10px;
+            color: white !important;
+        }
+        .stTextInput > div > div > input:focus, .stTextArea > div > div > textarea:focus {
+            border-color: #00F0FF !important;
+            box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.15) !important;
+        }
+        .stCaption, .stInfo { color: #94a3b8 !important; }
+        strong { color: #00F0FF !important; }
 
-        /* 7. Hide default file uploader junk (Standard) */
-        [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
-        
-        /* 8. Expander Styling */
-        .streamlit-expanderHeader {
-            background-color: #1a1c24;
-            color: #e2e8f0;
-            border-radius: 8px;
+        /* 8. MOBILE */
+        @media (max-width: 768px) {
+            .stButton > button { width: 100%; }
+            .block-container { padding-top: 1rem !important; }
+            .main-header { font-size: 2rem !important; }
         }
+        
+        /* 9. CLEANUP */
+        [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
+        [data-testid="stFileUploader"] section { padding: 0.5rem; border-color: rgba(0, 240, 255, 0.2); }
+        hr { margin-top: 0; margin-bottom: 2rem; border: none; height: 1px; background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.5), transparent); }
     </style>
 """, unsafe_allow_html=True)
 
-# --- SESSION STATE INITIALIZATION ---
+# --- SESSION STATE ---
+if "view_mode" not in st.session_state:
+    st.session_state.view_mode = "Dashboard"
 if "plan_json" not in st.session_state:
     st.session_state.plan_json = None
 if "chat_history" not in st.session_state:
@@ -679,14 +757,15 @@ if "quiz_thread_id" not in st.session_state:
     st.session_state.quiz_thread_id = str(uuid.uuid4())
 
 # --- FUNCTIONS ---
+def switch_view(view_name):
+    st.session_state.view_mode = view_name
+    st.rerun()
 
 def select_milestone(node_id):
     st.session_state.clicked_node = node_id
 
 def perform_search_logic(query):
-    """Refactored to be called from the modal."""
     if query.strip():
-        # Get context
         context = ""
         if st.session_state.clicked_node and st.session_state.plan_json:
             ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) 
@@ -694,13 +773,11 @@ def perform_search_logic(query):
             if ms_data:
                 context = ms_data['title']
         
-        # Update history
         user_message = f"🔍 Search: {query}"
         st.session_state.chat_history.append({"role": "user", "content": user_message})
         st.session_state.is_searching = True
         
         try:
-            # We can't use spinner inside a closed dialog easily, so we just run it
             search_result = search_with_agent(query=query, context=context)
             st.session_state.chat_history.append({"role": "ai", "content": search_result})
         except Exception as e:
@@ -709,36 +786,34 @@ def perform_search_logic(query):
         st.session_state.is_searching = False
         st.session_state.search_query = ""
 
-# --- SEARCH POPUP MODAL ---
+# --- MODALS ---
 @st.dialog("Research Assistant")
 def search_modal():
     st.caption("Ask a research question or upload documents to analyze.")
-    
-    # 1. Web Search
     st.markdown("##### 🌐 Web Search")
     with st.form("search_form"):
         query = st.text_input("Enter topic to research...", placeholder="e.g. Best practices for REST APIs")
         submit_search = st.form_submit_button("Start Search")
         if submit_search and query:
-            perform_search_logic(query)
+            with st.spinner("🔎 Researching topic..."):
+                perform_search_logic(query)
             st.rerun()
 
-    st.divider()
-
-    # 2. Document Upload (Moved here to declutter main chat)
+@st.dialog("Knowledge Base")
+def doc_modal():
+    st.caption("Upload documents to provide context for the AI.")
     st.markdown("##### 📄 Context Documents")
     uploaded_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
-    
     if uploaded_docs:
-        if st.button("Process & Index Documents"):
-            with st.spinner("Indexing..."):
+        if st.button("Process & Index Documents", use_container_width=True, type="primary"):
+            with st.spinner("Indexing Knowledge Base..."):
                 for uploaded_doc in uploaded_docs:
                     if uploaded_doc.name not in st.session_state.uploaded_docs:
                         file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
                         with open(file_path, "wb") as f:
                             f.write(uploaded_doc.getbuffer())
                         st.session_state.uploaded_docs[uploaded_doc.name] = file_path
-
+                
                 embeddings = OllamaEmbeddings(model="nomic-embed-text")
                 chunk_docs = []
                 file_docs = []
@@ -746,21 +821,33 @@ def search_modal():
                     chunks, file_summary = ingest_pdf(path)
                     chunk_docs.extend(chunks)
                     file_docs.append(file_summary)
-
+                
                 st.session_state.vectorstore = FAISS.from_documents(chunk_docs, embeddings)
                 st.session_state.file_vectorstore = FAISS.from_documents(file_docs, embeddings)
-            st.success("Indexed!")
+            st.success("✅ Documents Indexed Successfully!")
             st.rerun()
 
 # --- SIDEBAR (FIXED) ---
 with st.sidebar:
-    st.header("🎓 AI Planner")
+    st.header("🎓 Student Partner")
     
-    st.markdown("### 🎯 Your Goal")
+    st.markdown("### 🧭 Menu")
+    col_nav1, col_nav2 = st.columns(2)
+    with col_nav1:
+        dashboard_type = "primary" if st.session_state.view_mode == "Dashboard" else "secondary"
+        if st.button("📊 Board", key="nav_dashboard", use_container_width=True, type=dashboard_type):
+            switch_view("Dashboard")
+    with col_nav2:
+        quiz_type = "primary" if st.session_state.view_mode == "Take Quiz" else "secondary"
+        if st.button("📝 Quiz", key="nav_quiz", use_container_width=True, type=quiz_type):
+            switch_view("Take Quiz")
+            
+    st.divider()
+    
+    st.markdown("### 🎯 Goal")
     user_goal = st.text_input("Goal", "Python Backend Development", label_visibility="collapsed", placeholder="E.g., Learn React")
     
-    # 1. GENERATE BUTTON (Primary Action - Vertical Stack)
-    if st.button("🚀 Generate New Roadmap", use_container_width=True, type="primary"):
+    if st.button("🚀 Generate Roadmap", use_container_width=True):
         with st.spinner("Generative AI is thinking..."):
             initial_state = PlanState(
                 user_request=user_goal, attempt_count=0, messages=[], 
@@ -775,10 +862,7 @@ with st.sidebar:
                 st.session_state.chat_history.append({"role": "ai", "content": "Roadmap Generated Successfully!"})
                 st.rerun()
     
-    # 2. UPLOAD SECTION (Secondary Action - Hidden in Expander)
-    st.write("") # Spacer
-    st.caption("OR")
-    with st.expander("📂 Load Existing Plan"):
+    with st.expander("📂 Load Plan"):
         uploaded_file = st.file_uploader("Upload JSON", type=["json"], label_visibility="collapsed")
         if uploaded_file is not None:
             if "last_uploaded_file" not in st.session_state or st.session_state.last_uploaded_file != uploaded_file.name:
@@ -791,13 +875,9 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"File Error: {e}")
 
-    st.divider()
-
-    # 3. NAVIGATION SECTION
-    st.markdown("### 📍 Navigation")
-    
     if st.session_state.plan_json:
-        # Download Button
+        st.divider()
+        st.markdown("### 📍 Milestones")
         st.download_button(
             "📥 Export JSON", 
             data=json.dumps(st.session_state.plan_json, indent=2), 
@@ -805,240 +885,324 @@ with st.sidebar:
             mime="application/json", 
             use_container_width=True
         )
-        
-        st.write("") # Spacer
-
-        # Scrollable Navigation List
-        with st.container(height=400):
+        st.write("") 
+        with st.container(height=300):
             milestones = st.session_state.plan_json.get("milestones", [])
             for ms in milestones:
                 ms_id = ms.get("id")
                 is_selected = st.session_state.clicked_node == ms_id
-                
-                # Visual indicator for selection
                 icon = "🔵" if is_selected else "⚪"
                 label = ms['title']
-                
-                # Button for each milestone
                 if st.button(f"{icon} {label}", key=f"nav_{ms_id}", use_container_width=True):
                     select_milestone(ms_id)
                     st.rerun()
-    else:
-        st.info("Generate a plan to see your milestones here.")
 
-# --- MAIN UI LAYOUT ---
-col1, col2 = st.columns([2.5, 1.2])
-
-# LEFT COLUMN: Graph & Chat
-with col1:
-    # 1. Top Section: Visual Graph
-    if st.session_state.plan_json:
-        with st.expander("🗺️ Interactive Roadmap View", expanded=True):
-            nodes = []
-            edges = []
-            milestones = st.session_state.plan_json.get("milestones", [])
-            for i, ms in enumerate(milestones):
-                ms_id = ms.get("id", f"m{i}")
-                is_selected = st.session_state.clicked_node == ms_id
-                node_color = "#3b82f6" if is_selected else "#ef4444" 
-                node_size = 35 if is_selected else 25
-                nodes.append(Node(id=ms_id, label=ms["title"], size=node_size, color=node_color, font={'color': 'white'}))
-                if i > 0:
-                    prev_id = milestones[i-1].get("id", f"m{i-1}")
-                    edges.append(Edge(source=prev_id, target=ms_id, type="CURVE_SMOOTH"))
-
-            config = AgConfig(width=None, height=300, directed=True, physics=False, nodeHighlightBehavior=True, highlightColor="#60a5fa", backgroundColor="#0e1117")
-            returned_id = agraph(nodes=nodes, edges=edges, config=config)
-            if returned_id and returned_id != st.session_state.clicked_node:
-                st.session_state.clicked_node = returned_id
-                st.rerun()
-
-    # 2. Bottom Section: Chat Interface
-    st.subheader("💬 Study Assistant")
+# =========================================================
+# === MAIN PAGE HEADER (NEW & ORGANIZED) ===
+# =========================================================
+# This section is now clearly defined within the page body, not the browser tab.
+with st.container():
+    # Use columns to organize the header elements nicely
+    hc1, hc2 = st.columns([0.6, 4])
+    with hc1:
+        # A large, prominent icon
+        st.markdown("<div style='font-size: 4.5rem; text-align: center; animation: float 3s ease-in-out infinite;'>🎓</div>", unsafe_allow_html=True)
+    with hc2:
+        # The main title using specific CSS classes for styling
+        st.markdown('<h1 class="main-header">Student Partner AI</h1>', unsafe_allow_html=True)
+        # A descriptive subtitle
+        st.markdown('<p class="sub-header">Your intelligent companion for structured learning and roadmap planning.</p>', unsafe_allow_html=True)
     
-    # Context Banner
-    selected_ms_text = ""
-    if st.session_state.plan_json and st.session_state.clicked_node:
-        ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
-        if ms_data:
-            st.caption(f"Currently focused on: **{ms_data['title']}**")
-            selected_ms_text = f"Title: {ms_data['title']}. Description: {ms_data['description']}."
+    # A glowing divider to separate header from content
+    st.markdown("<hr>", unsafe_allow_html=True)
 
-    # Chat History Container (Fixed height for scrolling)
-    chat_container = st.container(height=500)
-    with chat_container:
-        for msg in st.session_state.chat_history:
-            with st.chat_message(msg["role"]):
-                st.write(msg["content"])
-        if st.session_state.is_searching:
-            with st.chat_message("assistant"):
-                st.write("🔍 Researching...")
-
-    # Chat Tools Toolbar (Above input)
-    tool_col1, tool_col2, tool_col3 = st.columns([0.15, 0.15, 0.7])
-    with tool_col1:
-        if st.button("🎤 Speech", help="Voice Input"):
-            st.toast("Voice input coming soon!")
-    with tool_col2:
-        if st.button("🔍 Search", help="Open Research Tools"):
-            search_modal()
-
-    # Sticky Input
-    user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
-
-    if user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
-        with chat_container:
-            st.chat_message("user").write(user_input)
-
-        with st.spinner("Processing..."):
-            history_context = ""
-            if len(st.session_state.chat_history) > 1:
-                history_context = summarize_history(st.session_state.chat_history[:-1])
-                
-            initial_chat_state = {
-                "user_prompt": user_input,
-                "messages": [],
-                "plan_actions": [],
-                "plan_instructions": [],
-                "research_memory": [],
-                "raw_data_storage": [],
-                "execution_log": [],
-                "validation_errors": [],
-                "refinement_attempts": 0,
-                "plan_data": st.session_state.plan_json,
-                "selected_milestone_context": selected_ms_text,
-                "conversation_summary": history_context
-            }
-
-            try:
-                for chunk in study_buddy_graph.stream(initial_chat_state, stream_mode="updates", config={"configurable": {"thread_id": st.session_state.quiz_thread_id}}):
-                    # Logic processing...
-                    if "orchestrator" in chunk:
-                        plan = chunk["orchestrator"]
-                        actions = plan.get("plan_actions", [])
-                        if "END" in actions:
-                             st.session_state.chat_history.append({"role": "ai", "content": "I cannot handle this request."})
-                        else:
-                            with chat_container: st.caption(f"⚙️ Plan: {', '.join(actions)}")
-
-                    if "explain_node" in chunk:
-                        for msg in chunk["explain_node"].get("messages", []):
-                            with chat_container: st.chat_message("ai").write(msg.content)
-                            st.session_state.chat_history.append({"role": "ai", "content": msg.content})
-
-                    if "quiz_generator" in chunk:
-                        quiz_data = chunk["quiz_generator"].get("quiz_output")
-                        if quiz_data:
-                            st.session_state.active_quiz = quiz_data
-                            st.session_state.quiz_answers = {}
-                            st.session_state.quiz_submitted = False
-                            msg_content = "📝 Quiz generated! Check the Quiz tab."
-                            with chat_container: st.chat_message("ai").write(msg_content)
-                            st.session_state.chat_history.append({"role": "ai", "content": msg_content})
-
-                    if "summarizer" in chunk:
-                         for msg in chunk["summarizer"].get("messages", []):
-                            with chat_container: st.chat_message("ai").write(msg.content)
-                            st.session_state.chat_history.append({"role": "ai", "content": msg.content})
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
-
-
-# RIGHT COLUMN: Manager & Details
-with col2:
-    tabs = st.tabs(["📝 Details", "🛠️ Manager", "❓ Quiz"])
+# =========================================================
+# === VIEW 1: DASHBOARD (Chat, Graph, Manager) ===
+# =========================================================
+if st.session_state.view_mode == "Dashboard":
     
-    # TAB 1: Milestone Details (Cleaner view)
-    with tabs[0]:
-        st.subheader("Milestone Details")
-        detail_container = st.container(height=650) # Fixed height for scroll
-        with detail_container:
-            if st.session_state.clicked_node and st.session_state.plan_json:
-                ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
-                if ms_data:
-                    st.markdown(f"### {ms_data['title']}")
-                    st.caption(f"Status: {ms_data['status'].upper()}")
-                    st.info(ms_data['description'])
-                    st.markdown("#### Tasks")
-                    for task in ms_data.get("tasks", []):
-                        icon = "✅" if ms_data['status'] == 'done' else "⬜"
-                        st.markdown(f"**{icon} {task['name']}**")
-                        st.caption(task['description'])
-                        if task.get('resources'): st.markdown(f"📚 [Read]({task['resources']})")
-                        if task.get('youtube'): st.markdown(f"📺 [Watch]({task['youtube']})")
-                        st.divider()
-            else:
-                st.info("Select a milestone from the sidebar or graph to view details.")
+    # Main Layout: 2 Columns on Desktop, Stacks on Mobile
+    col1, col2 = st.columns([2.5, 1.2])
 
-    # TAB 2: Roadmap Editor
-    with tabs[1]:
-        st.subheader("Edit Roadmap")
-        editor_chat_container = st.container(height=500)
-        with editor_chat_container:
-            for msg in st.session_state.editor_chat_history:
-                with st.chat_message(msg["role"]):
-                    st.write(msg["content"])
-        
-        editor_input = st.chat_input("Add/Remove/Edit milestones...", key="editor_input")
-        if editor_input:
-            st.session_state.editor_chat_history.append({"role": "user", "content": editor_input})
-            with st.spinner("Updating..."):
-                state_update = PlanState(
-                    current_plan=st.session_state.plan_json,
-                    messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.editor_chat_history],
-                    user_request=user_goal,
-                    ui_selected_node=st.session_state.clicked_node,
-                    attempt_count=0, feedback=None, search_context="", raw_output="", error=None
+    # LEFT COLUMN: Graph & Chat
+    with col1:
+        # Slightly smaller header for this section
+        st.markdown("#### 🚀 Roadmap View")
+        st.caption("Visualize your path and track progress.")
+        st.write("") 
+
+        # GRAPH SECTION
+        if st.session_state.plan_json:
+            with st.expander("🗺️ Open Map View", expanded=True):
+                nodes = []
+                edges = []
+                milestones = st.session_state.plan_json.get("milestones", [])
+                for i, ms in enumerate(milestones):
+                    ms_id = ms.get("id", f"m{i}")
+                    is_selected = st.session_state.clicked_node == ms_id
+                    
+                    # UPDATE GRAPH COLORS TO MATCH NEW THEME
+                    node_color = "#00F0FF" if is_selected else "#FF0080" 
+                    node_size = 30
+                    step_number = str(i + 1)
+                    
+                    nodes.append(Node(
+                        id=ms_id, label=step_number, title=ms["title"], shape="circle", size=node_size, color=node_color,
+                        font={'color': 'white', 'size': 16, 'face': 'Courier New', 'align': 'center', 'bold': True},
+                        borderWidth=2, borderWidthSelected=4, 
+                        shadow={'enabled': True, 'color': node_color, 'size': 10}
+                    ))
+                    if i > 0:
+                        prev_id = milestones[i-1].get("id", f"m{i-1}")
+                        edges.append(Edge(source=prev_id, target=ms_id, type="CURVE_SMOOTH", arrows="to", color="#5eead4"))
+
+                config = AgConfig(
+                    width=None, 
+                    height=450, 
+                    directed=True, 
+                    physics=True, 
+                    nodeHighlightBehavior=True, 
+                    highlightColor="#00F0FF", 
+                    backgroundColor="#0e1117",
+                    physicsOptions={
+                        'stabilization': {'enabled': True, 'iterations': 1000}, 
+                        'barnesHut': {'gravitationalConstant': -3000, 'springLength': 130, 'springConstant': 0.04}
+                    }
                 )
-                result = editor_graph.invoke(state_update)
-                if not result.get("error"):
-                    st.session_state.plan_json = result["current_plan"]
-                    st.session_state.editor_chat_history.append({"role": "ai", "content": "Plan updated!"})
+                returned_id = agraph(nodes=nodes, edges=edges, config=config)
+                if returned_id and returned_id != st.session_state.clicked_node:
+                    st.session_state.clicked_node = returned_id
                     st.rerun()
 
-    # TAB 3: Quiz Interface
-    with tabs[2]:
-        st.subheader("Active Quiz")
-        quiz_container = st.container(height=650)
-        with quiz_container:
-            quiz = st.session_state.active_quiz
-            if not quiz:
-                st.info("Ask the Assistant to generate a quiz for a milestone!")
-            else:
-                st.markdown(f"**Topic:** {quiz.topic}")
-                
-                with st.form("quiz_form"):
-                    st.markdown("##### Multiple Choice")
-                    for idx, q in enumerate(quiz.mcq_questions):
-                        st.session_state.quiz_answers[f"mcq_{idx}"] = st.radio(q.question, q.options, key=f"mcq_{idx}", index=None)
-                    
-                    if quiz.article_questions:
-                        st.markdown("##### Short Answer")
-                        for idx, q in enumerate(quiz.article_questions):
-                            st.session_state.quiz_answers[f"article_{idx}"] = st.text_area(q.question, key=f"article_{idx}")
-                    
-                    if quiz.coding_questions:
-                        st.markdown("##### Coding Challenge")
-                        for idx, q in enumerate(quiz.coding_questions):
-                            st.write(q.question)
-                            st.session_state.quiz_answers[f"code_{idx}"] = st.text_area("Code", height=150, key=f"code_{idx}")
+        # CHAT SECTION
+        st.divider()
+        st.subheader("💬 Study Assistant")
+        
+        selected_ms_text = ""
+        if st.session_state.plan_json and st.session_state.clicked_node:
+            ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
+            if ms_data:
+                st.info(f"**Focused on:** {ms_data['title']}")
+                selected_ms_text = f"Title: {ms_data['title']}. Description: {ms_data['description']}."
 
-                    if st.form_submit_button("Submit Quiz"):
-                        # Logic identical to previous, just inside form
-                        submission = {"quiz": quiz.model_dump(), "user_answers": st.session_state.quiz_answers}
-                        # ... saving logic ...
-                        st.session_state.quiz_submitted = True
-                        st.success("Submitted! Analyzing...")
-                        # ... graph invocation for grading ...
-                        # (Keeping logic brief for UI focus, ensure you paste original grading logic here if needed)
+        chat_container = st.container(height=500)
+        with chat_container:
+            for msg in st.session_state.chat_history:
+                with st.chat_message(msg["role"]):
+                    st.write(msg["content"])
+            if st.session_state.is_searching:
+                with st.chat_message("assistant"):
+                    st.write("🔍 Researching...")
+
+        # Toolbar Buttons (Responsive)
+        tool_c1, tool_c2, tool_c3 = st.columns(3)
+        with tool_c1:
+            if st.button("🎤 Speech", help="Voice Input", use_container_width=True):
+                st.toast("Voice input coming soon!")
+        with tool_c2:
+            if st.button("🔍 Search", help="Web Search", use_container_width=True):
+                search_modal()
+        with tool_c3:
+            if st.button("📂 Upload", help="Upload Docs", use_container_width=True):
+                doc_modal()
+
+        user_input = st.chat_input("Ask about your plan, request a quiz, or explain a topic...")
+        
+        if user_input:
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            with chat_container:
+                st.chat_message("user").write(user_input)
+            
+            # KEYWORD TRIGGER
+            if "quiz" in user_input.lower():
+                notification_msg = "Go check the quiz page! 📝"
+                st.session_state.chat_history.append({"role": "ai", "content": notification_msg})
+                with chat_container:
+                    st.chat_message("ai").write(notification_msg)
+            else:
+                with st.spinner("Processing..."):
+                    history_context = ""
+                    if len(st.session_state.chat_history) > 1:
+                        history_context = summarize_history(st.session_state.chat_history[:-1])
+                        
+                    initial_chat_state = {
+                        "user_prompt": user_input, "messages": [], "plan_actions": [], "plan_instructions": [], "research_memory": [],
+                        "raw_data_storage": [], "execution_log": [], "validation_errors": [], "refinement_attempts": 0,
+                        "plan_data": st.session_state.plan_json, "selected_milestone_context": selected_ms_text, "conversation_summary": history_context
+                    }
+
+                    try:
+                        for chunk in study_buddy_graph.stream(initial_chat_state, stream_mode="updates", config={"configurable": {"thread_id": st.session_state.quiz_thread_id}}):
+                            if "orchestrator" in chunk:
+                                plan = chunk["orchestrator"]
+                                actions = plan.get("plan_actions", [])
+                                if "END" in actions:
+                                     st.session_state.chat_history.append({"role": "ai", "content": "I cannot handle this request."})
+                                else:
+                                    with chat_container: st.caption(f"⚙️ Plan: {', '.join(actions)}")
+                            if "explain_node" in chunk:
+                                for msg in chunk["explain_node"].get("messages", []):
+                                    with chat_container: st.chat_message("ai").write(msg.content)
+                                    st.session_state.chat_history.append({"role": "ai", "content": msg.content})
+                            if "quiz_generator" in chunk:
+                                quiz_data = chunk["quiz_generator"].get("quiz_output")
+                                if quiz_data:
+                                    st.session_state.active_quiz = quiz_data
+                                    st.session_state.quiz_answers = {}
+                                    st.session_state.quiz_submitted = False
+                                    msg_content = "📝 **Quiz Generated!** Navigate to the **'Quiz'** page from the sidebar to start."
+                                    with chat_container: st.chat_message("ai").write(msg_content)
+                                    st.session_state.chat_history.append({"role": "ai", "content": msg_content})
+                            if "summarizer" in chunk:
+                                 for msg in chunk["summarizer"].get("messages", []):
+                                    with chat_container: st.chat_message("ai").write(msg.content)
+                                    st.session_state.chat_history.append({"role": "ai", "content": msg.content})
+                    except Exception as e:
+                        st.error(f"Connection Error: Ensure Ollama is running. ({str(e)})")
+
+    # RIGHT COLUMN: Manager & Details
+    with col2:
+        st.write("") 
+        st.write("") 
+        tabs = st.tabs(["📝 Details", "🛠️ Manager"])
+        
+        # TAB 1: Milestone Details
+        with tabs[0]:
+            st.subheader("Milestone Details")
+            detail_container = st.container(height=650)
+            with detail_container:
+                if st.session_state.clicked_node and st.session_state.plan_json:
+                    ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
+                    if ms_data:
+                        st.markdown(f"### {ms_data['title']}")
+                        st.caption(f"Status: {ms_data['status'].upper()}")
+                        st.info(ms_data['description'])
+                        st.markdown("#### Tasks")
+                        for task in ms_data.get("tasks", []):
+                            icon = "✅" if ms_data['status'] == 'done' else "⬜"
+                            st.markdown(f"**{icon} {task['name']}**")
+                            st.caption(task['description'])
+                            if task.get('resources'): st.markdown(f"📚 [Read]({task['resources']})")
+                            if task.get('youtube'): st.markdown(f"📺 [Watch]({task['youtube']})")
+                            st.divider()
+                else:
+                    st.info("Select a milestone from the sidebar or graph to view details.")
+
+        # TAB 2: Roadmap Editor
+        with tabs[1]:
+            st.subheader("Edit Roadmap")
+            editor_chat_container = st.container(height=500)
+            with editor_chat_container:
+                if not st.session_state.editor_chat_history:
+                    st.markdown("""
+                    <div style="text-align: center; color: #94a3b8; margin-top: 40px;">
+                        <div style="font-size: 3rem; opacity: 0.8;">🛠️</div>
+                        <h3 style="color: #e2e8f0; margin: 10px 0;">Roadmap Manager</h3>
+                        <p>How would you like to adjust your plan?</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                for msg in st.session_state.editor_chat_history:
+                    with st.chat_message(msg["role"]):
+                        st.write(msg["content"])
+            
+            editor_input = st.chat_input("Type instructions to modify plan...", key="editor_input")
+            if editor_input:
+                st.session_state.editor_chat_history.append({"role": "user", "content": editor_input})
+                with st.spinner("AI is updating your roadmap structure..."):
+                    state_update = PlanState(
+                        current_plan=st.session_state.plan_json,
+                        messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.editor_chat_history],
+                        user_request=user_goal,
+                        ui_selected_node=st.session_state.clicked_node,
+                        attempt_count=0, feedback=None, search_context="", raw_output="", error=None
+                    )
+                    result = editor_graph.invoke(state_update)
+                    if not result.get("error"):
+                        st.session_state.plan_json = result["current_plan"]
+                        st.session_state.editor_chat_history.append({"role": "ai", "content": "✅ Plan updated successfully!"})
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to update: {result.get('error')}")
+
+# =========================================================
+# === VIEW 2: QUIZ PAGE (Dedicated Full Screen) ===
+# =========================================================
+elif st.session_state.view_mode == "Take Quiz":
+    
+    # Centered container for better readability
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.markdown('<h3>📝 Knowledge Check</h3>', unsafe_allow_html=True)
+        
+        quiz = st.session_state.active_quiz
+        if not quiz:
+            st.warning("⚠️ No Active Quiz Found")
+            st.markdown("""
+                1. Go to the **Dashboard**.
+                2. Ask the AI: _"Generate a quiz about [Topic]"_.
+                3. Come back here to take it!
+            """)
+        else:
+            st.info(f"Topic: **{quiz.topic}** | Difficulty: **{quiz.proficiency_level}**")
+            st.divider()
+            
+            with st.form("quiz_form"):
+                # 1. MCQs
+                st.subheader("Multiple Choice")
+                for idx, q in enumerate(quiz.mcq_questions):
+                    st.markdown(f"**{idx+1}. {q.question}**")
+                    st.session_state.quiz_answers[f"mcq_{idx}"] = st.radio(
+                        "Select Option:", q.options, key=f"mcq_{idx}", index=None, label_visibility="collapsed"
+                    )
+                    st.write("") # Spacer
+                
+                st.divider()
+
+                # 2. Short Answer
+                if quiz.article_questions:
+                    st.subheader("Short Answer")
+                    for idx, q in enumerate(quiz.article_questions):
+                        st.markdown(f"**{q.question}**")
+                        st.session_state.quiz_answers[f"article_{idx}"] = st.text_area(
+                            "Your Answer:", key=f"article_{idx}", label_visibility="collapsed"
+                        )
+                        st.write("")
+
+                st.divider()
+
+                # 3. Coding Challenge
+                if quiz.coding_questions:
+                    st.subheader("Coding Challenge")
+                    for idx, q in enumerate(quiz.coding_questions):
+                        st.markdown(f"**{q.question}**")
+                        st.session_state.quiz_answers[f"code_{idx}"] = st.text_area(
+                            "Write Code:", height=200, key=f"code_{idx}", label_visibility="collapsed",
+                            placeholder="def solution():\n    pass"
+                        )
+                        st.write("")
+
+                submit_btn = st.form_submit_button("✅ Submit Quiz", type="primary", use_container_width=True)
+
+                if submit_btn:
+                    submission = {"quiz": quiz.model_dump(), "user_answers": st.session_state.quiz_answers}
+                    st.session_state.quiz_submitted = True
+                    
+                    with st.spinner("Grading your answers..."):
+                        # Logic to stream grading result
                         events = study_buddy_graph.stream(None, config={"configurable": {"thread_id": st.session_state.quiz_thread_id, "resume": submission}})
                         for event in events:
                              if isinstance(event, dict) and "user_profile_summary" in event:
                                  st.session_state.last_quiz_result = event["user_profile_summary"]
-                        st.rerun()
-                
-                if st.session_state.get("last_quiz_result"):
-                    res = st.session_state.last_quiz_result
+                    st.rerun()
+            
+            # Show Results if available
+            if st.session_state.get("last_quiz_result"):
+                res = st.session_state.last_quiz_result
+                st.divider()
+                st.success("🎉 Evaluation Complete!")
+                col_score, col_msg = st.columns([1, 4])
+                with col_score:
                     st.metric("Score", f"{res['accuracy']}%")
-                    st.write(res["summary_text"])
+                with col_msg:
+                    st.markdown(res["summary_text"])
