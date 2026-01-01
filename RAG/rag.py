@@ -26,8 +26,6 @@ def get_context_chunks(query: str, k: int = 5):      ### vectorstore is now in s
     # vectorstore = load_vectorstore()               ### it's not saved locally anymore
     vectorstore = st.session_state.vectorstore
     if vectorstore is None:
-        print("#" *70,"Vectorstore is not loaded.", "#" *70)
-        print("#-#" * 100)
         return ""
     docs = vectorstore.similarity_search(query, k=k)
     context = "\n\n".join(

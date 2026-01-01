@@ -22,19 +22,13 @@ def quiz_node(state: AgentState):
     
     # Uses the structured output logic from your Real Node code
     # We use Gemini for structured quiz generation as in your config
-    llm = Config.get_gemini_llm().with_structured_output(Quiz)
+
+    
+    # llm = Config.get_gemini_llm().with_structured_output(Quiz)
+    llm = Config.get_ollama_llm().with_structured_output(Quiz)
     
     
-    prompt = f"""
-    Generate a quiz based on this instruction: {instruction}
-    Context: {context}
-    New Research: {research}
-    Entire Roadmap: {state.get("plan_data")}
-    if the User selected a Specific Milestone then the User want you to focus on this milestone or a task in this milestone then you Should search for the Milestone in the "Entire Roadmap" above based on the ID and Tailor your Answer to this milestone
-    and here is the Milestone ID: {milestone_context}
-    
-    Follow the Quiz schema (MCQs, Articles, Coding).
-    """
+
     prompt = f"""
     You are an expert educator and assessment designer.
 
@@ -49,9 +43,6 @@ def quiz_node(state: AgentState):
 
     WEB SEARCH CONTEXT (use only if document context is insufficient):
     {research if research else "Web search not required."}
-
-    PRIOR CONVERSATION CONTEXT:
-    {context}
 
     ROADMAP CONTEXT:
     {state.get("plan_data")}

@@ -1,242 +1,264 @@
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from config import Config
-import os
-import time
 import json
 from pathlib import Path
-from typing import Any
+from typing import Dict, Any
+import re
 
 SUBMISSION_DIR = Path("quiz_submissions")
-print(f"[USER_SUMMARY_NODE] Using submission directory: {str(SUBMISSION_DIR)}")
 
 def debug(msg):
-    print(f"[USER_SUMMARY_NODE][DEBUG] {msg}")
-
-def read_last_json(directory: str | Path) -> Any:
-    directory = Path(directory)
-
-    if not directory.exists() or not directory.is_dir():
-        raise FileNotFoundError(f"Directory not found: {directory}")
-
-    json_files = list(directory.glob("*.json"))
-
-    if not json_files:
-        raise FileNotFoundError(f"No JSON files found in {directory}")
-
-    # Sort by modification time (most recent last)
-    latest_file = max(json_files, key=lambda p: p.stat().st_mtime)
-
-    with latest_file.open("r", encoding="utf-8") as f:
-        return json.load(f)
+    print(f"[USER_GRADER_NODE][DEBUG] {msg}")
 
 
-# def wait_for_submission(
-#     directory: str,
-#     timeout: int = 300,
-#     poll_interval: float = 12.0
-# ):
-#     """
-#     Waits for a new JSON file to appear in directory.
-#     Returns parsed JSON or None on timeout.
-#     """
-#     debug(f"Waiting for submission in directory: {directory}")
-#     debug(f"Timeout: {timeout}s | Poll interval: {poll_interval}s")
-
-#     start = time.time()
-
-#     if os.path.exists(directory):
-#         seen = set(os.listdir(directory))
-#         debug(f"Initial files in directory: {seen}")
-#     else:
-#         seen = set()
-#         debug("Directory does not exist yet")
-
-#     while time.time() - start < timeout:
-#         elapsed = round(time.time() - start, 2)
-#         if elapsed % 60 < poll_interval:
-#             debug(f"Polling... elapsed={elapsed}s")
-
-#         if not os.path.exists(directory):
-#             debug("Directory still missing, sleeping...")
-#             time.sleep(poll_interval)
-#             continue
-
-#         current = set(os.listdir(directory))
-#         new_files = [
-#             f for f in current - seen
-#             if f.endswith(".json")
-#         ]
-#         if current:    
-#             debug(f"Current files: {current}")
-#         if new_files:
-#             debug(f"New JSON files detected: {new_files}")
-
-#         if new_files:
-#             path = os.path.join(directory, new_files[0])
-#             debug(f"Loading submission file: {path}")
-
-#             try:
-#                 with open(path, "r") as f:
-#                     data = json.load(f)
-#                 debug("Submission JSON loaded successfully")
-#                 return data
-#             except Exception as e:
-#                 debug(f"ERROR reading submission file: {e}")
-#                 return None
-
-#         time.sleep(poll_interval)
-
-#     debug("Timeout reached - no submission received")
-#     return None
-
+# --------------------------------------------------
+# Utilities
+# --------------------------------------------------
 
 def merge_user_answers(quiz: dict, user_answers: dict):
-    """
-    Injects user answers into quiz questions.
-    """
-    debug("Merging user answers into quiz structure")
-
     for i, q in enumerate(quiz.get("mcq_questions", [])):
-        answer_key = f"mcq_{i}"
-        q["user_answer"] = user_answers.get(answer_key)
-        debug(
-            f"MCQ {i}: user_answer={q['user_answer']} | correct={q.get('correct_answer')}"
-        )
+        q["user_answer"] = user_answers.get(f"mcq_{i}")
+
+    for i, q in enumerate(quiz.get("article_questions", [])):
+        q["user_answer"] = user_answers.get(f"article_{i}")
 
     return quiz
 
 
+def parse_llm_json(response: str) -> dict:
+    """
+    Extracts and parses the first JSON object found in an LLM response.
+    """
+
+    # Remove markdown code fences if present
+    response = response.strip()
+    response = re.sub(r"^```(json)?", "", response)
+    response = re.sub(r"```$", "", response)
+
+    # Extract JSON object
+    match = re.search(r"\{[\s\S]*\}", response)
+    if not match:
+        raise ValueError("No JSON object found in LLM response")
+
+    return json.loads(match.group())
+
+
+# --------------------------------------------------
+# LLM helpers
+# --------------------------------------------------
+
+def grade_article(llm, question: str, user_answer: str):
+    """
+    Grades an article-style answer using the LLM without a provided model answer.
+    The LLM infers the expected answer from the question itself.
+    """
+
+    prompt = f"""
+You are an educational evaluator.
+
+Your task:
+1. Infer what a high-quality answer to the question should contain.
+2. Compare the user's answer against that inferred ideal.
+3. Grade the answer from 0 to 3 using the rubric below.
+
+GRADING RUBRIC:
+- 3: Correct, complete, and well-explained
+- 2: Mostly correct but missing minor details or clarity
+- 1: Partially correct, shows limited understanding
+- 0: Incorrect, irrelevant, or empty answer
+
+Question:
+{question}
+
+User answer:
+{user_answer}
+
+Return ONLY valid JSON in the following format:
+{{
+  "score": <integer between 0 and 3>,
+  "reasoning": "<brief explanation for the user to explain to they why this score was given to their answer and what the ideal answer is>"
+}}
+"""
+
+    response = llm.invoke(prompt).content.strip()
+    debug(f"LLM response for grading article: {response}")
+
+    try:
+        data = parse_llm_json(response)
+        score = int(data.get("score", 0))
+        score = max(0, min(3, score))
+        reasoning = data.get("reasoning", "No reasoning provided.")
+    except Exception:
+        # Fail-safe in case the LLM output is malformed
+        debug(f"JSON parsing failed: {e}")
+        score = 0
+        reasoning = "Failed to evaluate the answer due to invalid model output."
+
+    return score, reasoning
+
+def mcq_wrong_reasoning(llm, question, correct, user_answer):
+    prompt = f"""
+You are an educational assistant providing feedback to a student.
+
+Task:
+- Explain to the student why their selected answer is incorrect.
+- Speak directly to the student.
+- Use only the information in the question and the correct answer.
+- Avoid adding any external facts or making assumptions not in the question.
+- Keep it concise, clear, and helpful (1-2 sentences).
+
+Question:
+{question}
+
+Correct answer:
+{correct}
+
+Student's answer:
+{user_answer}
+
+Provide your explanation directly to the student.
+"""
+    return llm.invoke(prompt).content.strip()
+
+
+def performance_summary(llm, score, total, strong, weak):
+    prompt = f"""
+User quiz results:
+
+Score: {score}/{total}
+
+Strong areas:
+{strong}
+
+Weak areas:
+{weak}
+
+Generate a concise learning summary with:
+- Overall performance
+- Strengths
+- Weaknesses
+- Clear recommendations
+"""
+    return llm.invoke(prompt).content.strip()
+
+
+# --------------------------------------------------
+# Main Node
+# --------------------------------------------------
+
 def user_summary_node(state):
-    """
-    Generates a summarized performance report for the user
-    based on their quiz submission.
-    """
-    node_name = "USER_SUMMARY_NODE"
-    debug(f"Node started: {node_name}")
 
-    # -------------------------
-    # Wait for submission
-    # -------------------------
-    submission = read_last_json(str(SUBMISSION_DIR))
-
+    llm = Config.get_ollama_llm()
+    # submission = read_last_json(SUBMISSION_DIR)
+    submission = state.get("user_submission")
     if not submission:
-        debug("No submission received - exiting node")
-        return {
-            "error": "No user submission found",
-            "next": "END"
-        }
+        raise ValueError("No user submission found in AgentState")
 
-    debug("Submission payload keys:")
-    debug(list(submission.keys()))
-
-    if "quiz" not in submission or "user_answers" not in submission:
-        debug("ERROR: Submission JSON missing required keys")
-        debug(submission)
-        return {
-            "error": "Invalid submission format",
-            "next": "END"
-        }
 
     quiz = merge_user_answers(
         submission["quiz"],
         submission["user_answers"]
     )
 
-    # -------------------------
-    # Scoring
-    # -------------------------
-    correct = 0
-    total = 0
-    weak_questions = []
-    strong_questions = []
-
-    debug("Starting MCQ scoring loop")
-
-    for idx, q in enumerate(quiz.get("mcq_questions", [])):
-        debug(f"Evaluating MCQ {idx}: {q.get('question')}")
-
-        if q.get("user_answer") is None:
-            debug("→ Skipped (no answer)")
-            continue
-
-        total += 1
-
-        if q["user_answer"] == q["correct_answer"]:
-            correct += 1
-            strong_questions.append(q["question"])
-            debug("→ Correct")
-        else:
-            weak_questions.append(q["question"])
-            debug("→ Incorrect")
-
-    accuracy = round((correct / total) * 100, 2) if total else 0.0
-
-    debug(f"Scoring completed: {correct}/{total} ({accuracy}%)")
-
-    # -------------------------
-    # LLM Summary
-    # -------------------------
-    debug("Invoking LLM for summary generation")
-    llm = Config.get_ollama_llm()
-    # llm = Config.get_groq_llm() # Alternative LLM option
-
-    prompt = f"""
-    You are an educational analyst.
-
-    User quiz performance data:
-    - Accuracy: {accuracy}%
-    - Correct answers: {correct}/{total}
-
-    Strength areas:
-    {strong_questions}
-
-    Weak areas:
-    {weak_questions}
-
-    TASK:
-    Generate a concise learning summary with:
-    1. Overall performance assessment
-    2. Key strengths
-    3. Key weaknesses
-    4. Clear learning recommendations
-
-    Keep it short, factual, and reusable.
-    """
-
-    try:
-        summary_text = llm.invoke(prompt).content.strip()
-        debug("LLM summary generated successfully")
-    except Exception as e:
-        debug(f"ERROR during LLM invocation: {e}")
-        summary_text = "Summary generation failed."
-
-    # -------------------------
-    # Persist summary
-    # -------------------------
-    summary_payload = {
-        "accuracy": accuracy,
-        "strengths": strong_questions,
-        "weaknesses": weak_questions,
-        "summary_text": summary_text
+    results = {
+        "mcq_results": [],
+        "article_results": [],
+        "summary": {}
     }
 
-    debug("Final summary payload:")
-    debug(summary_payload["summary_text"])
+    earned_points = 0
+    total_points = 0
+    strong = []
+    weak = []
 
-    summary_path = SUBMISSION_DIR / "user_profile_summary.json"
+    # -------------------------
+    # MCQ grading (1 point)
+    # -------------------------
+    for q in quiz.get("mcq_questions", []):
+        total_points += 1
 
-    try:
-        with open(summary_path, "w") as f:
-            json.dump(summary_payload, f, indent=2)
-        debug(f"Summary saved to: {summary_path}")
-    except Exception as e:
-        debug(f"ERROR writing summary file: {e}")
+        correct = q["correct_answer"]
+        user = q.get("user_answer")
 
-    debug("Node execution completed successfully")
+        if user == correct:
+            earned_points += 1
+            strong.append(q["question"])
+            results["mcq_results"].append({
+                "question": q["question"],
+                "is_correct": True,
+                "reasoning": None
+            })
+        else:
+            weak.append(q["question"])
+            reasoning = None
+            if user is not None:
+                reasoning = mcq_wrong_reasoning(
+                    llm, q["question"], correct, user
+                )
+
+            results["mcq_results"].append({
+                "question": q["question"],
+                "is_correct": False,
+                "reasoning": reasoning
+            })
+
+    # -------------------------
+    # Article grading (3 points)
+    # -------------------------
+    for q in quiz.get("article_questions", []):
+        total_points += 3
+
+        user = q.get("user_answer")
+        if not user:
+            score, reasoning = 0, "No answer submitted."
+        else:
+            score, reasoning = grade_article(
+                llm,
+                q["question"],
+                user
+            )
+
+        earned_points += score
+
+        if score >= 2:
+            strong.append(q["question"])
+        else:
+            weak.append(q["question"])
+
+        results["article_results"].append({
+            "question": q["question"],
+            "score": score,
+            "out_of": 3,
+            "reasoning": reasoning
+        })
+
+    # -------------------------
+    # Summary
+    # -------------------------
+    summary_text = performance_summary(
+        llm, earned_points, total_points, strong, weak
+    )
+
+    accuracy = round((earned_points / total_points) * 100, 2)
+
+    results["summary"] = {
+        "score": earned_points,
+        "total": total_points,
+        "accuracy": accuracy,
+        "strong_points": strong,
+        "weak_points": weak,
+        "feedback": summary_text
+    }
+
+    # Persist      ابقي شيلها بعدين 
+    (SUBMISSION_DIR / "user_profile_summary.json").write_text(
+        json.dumps(results, indent=2),
+        encoding="utf-8"
+    )
 
     return {
-        "user_profile_summary": summary_payload,
+        "grader_output": results,
         "messages": [
-            SystemMessage(content="User quiz performance analysis completed")
-        ],
+            SystemMessage(content="Quiz graded successfully")
+        ]
     }
