@@ -447,8 +447,21 @@ with st.sidebar:
             for ms in milestones:
                 ms_id = ms.get("id")
                 is_selected = st.session_state.clicked_node == ms_id
-                icon = "🔵" if is_selected else "⚪"
+                status = ms.get("status", "to do").lower()
+
+                # --- COLOR LOGIC FOR SIDEBAR (ICONS) ---
+                if is_selected:
+                    icon = "🔵" # BLUE (Selected)
+                elif status == "done":
+                    icon = "🟢" # GREEN (Done)
+                elif status == "in progress":
+                    icon = "🟡" # YELLOW (In Progress)
+                else:
+                    icon = "🔴" # RED (To Do - Default)
+                
                 label = ms['title']
+                
+                # We use the icon to represent the color state in the button label
                 if st.button(f"{icon} {label}", key=f"nav_{ms_id}", use_container_width=True):
                     select_milestone(ms_id)
                     st.rerun()
@@ -496,21 +509,38 @@ if st.session_state.view_mode == "Dashboard":
                 for i, ms in enumerate(milestones):
                     ms_id = ms.get("id", f"m{i}")
                     is_selected = st.session_state.clicked_node == ms_id
+                    status = ms.get("status", "to do").lower()
                     
-                    # UPDATE GRAPH COLORS TO MATCH NEW THEME
-                    node_color = "#00F0FF" if is_selected else "#FF0080" 
-                    node_size = 30
+                    # --- COLOR LOGIC FOR GRAPH NODES ---
+                    if is_selected:
+                        node_color = "#00F0FF"  # BLUE (Selected - High Visibility Cyan)
+                    elif status == "done":
+                        node_color = "#10B981"  # GREEN (Emerald)
+                    elif status == "in progress":
+                        node_color = "#F59E0B"  # YELLOW (Amber)
+                    else:
+                        node_color = "#EF4444"  # RED (Red)
+
+                    node_size = 35 if is_selected else 25
                     step_number = str(i + 1)
                     
                     nodes.append(Node(
-                        id=ms_id, label=step_number, title=ms["title"], shape="circle", size=node_size, color=node_color,
+                        id=ms_id, 
+                        label=step_number, 
+                        title=ms["title"], 
+                        shape="dot", # 'dot' often looks cleaner than 'circle' for colored nodes
+                        size=node_size, 
+                        color=node_color,
                         font={'color': 'white', 'size': 16, 'face': 'Courier New', 'align': 'center', 'bold': True},
-                        borderWidth=2, borderWidthSelected=4, 
+                        borderWidth=2, 
+                        borderWidthSelected=4, 
                         shadow={'enabled': True, 'color': node_color, 'size': 10}
                     ))
+                    
                     if i > 0:
                         prev_id = milestones[i-1].get("id", f"m{i-1}")
-                        edges.append(Edge(source=prev_id, target=ms_id, type="CURVE_SMOOTH", arrows="to", color="#5eead4"))
+                        # Make edges subtle so nodes pop
+                        edges.append(Edge(source=prev_id, target=ms_id, type="CURVE_SMOOTH", arrows="to", color="#334155"))
 
                 config = AgConfig(
                     width=None, 
@@ -561,9 +591,7 @@ if st.session_state.view_mode == "Dashboard":
                     st.write("🔍 Researching...")
 
         # Toolbar Buttons (Responsive)
-        # Speech button removed here as requested
         tool_c1, tool_c2, tool_c3, tool_c4 = st.columns(4)
-        
         with tool_c1:
             if st.button("🔍 Search", help="Web Search", use_container_width=True):
                 search_modal()
@@ -584,14 +612,8 @@ if st.session_state.view_mode == "Dashboard":
             with chat_container:
                 st.chat_message("user").write(user_input)
             
-            # KEYWORD TRIGGER
-            if "quiz" in user_input.lower():
-                notification_msg = "Go check the quiz page! 📝"
-                st.session_state.chat_history.append({"role": "ai", "content": notification_msg})
-                with chat_container:
-                    st.chat_message("ai").write(notification_msg)
-            else:
-                with st.spinner("Processing..."):
+            
+            with st.spinner("Processing..."):
                     history_context = ""
                     if len(st.session_state.chat_history) > 1:
                         history_context = summarize_history(st.session_state.chat_history[:-1])
@@ -646,16 +668,78 @@ if st.session_state.view_mode == "Dashboard":
                     ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
                     if ms_data:
                         st.markdown(f"### {ms_data['title']}")
-                        st.caption(f"Status: {ms_data['status'].upper()}")
+                        
+                        # 1. Get and Format Status
+                        status = ms_data.get('status', 'to do').lower()
+                        is_milestone_done = (status == 'done')
+                        
+                        # 2. Assign Color/Icon for the Milestone Header
+                        if status == 'done':
+                            header_icon = "🟢"
+                        elif status == 'in progress':
+                            header_icon = "🟡"
+                        else:
+                            header_icon = "🔴"
+                            
+                        st.caption(f"Status: **{status.upper()}**")
                         st.info(ms_data['description'])
+                        st.divider()
+                        
                         st.markdown("#### Tasks")
-                        for task in ms_data.get("tasks", []):
-                            icon = "✅" if ms_data['status'] == 'done' else "⬜"
-                            st.markdown(f"**{icon} {task['name']}**")
-                            st.caption(task['description'])
-                            if task.get('resources'): st.markdown(f"📚 [Read]({task['resources']})")
-                            if task.get('youtube'): st.markdown(f"📺 [Watch]({task['youtube']})")
-                            st.divider()
+                        
+                        # 3. Task Loop with Checkbox Logic
+                        for t_idx, task in enumerate(ms_data.get("tasks", [])):
+                            # 1. Unique key for the widget
+                            task_status_key = f"status_{ms_data['id']}_{t_idx}"
+                            
+                            # 2. Source of Truth: Is it marked 'completed' in JSON?
+                            is_task_done_in_json = task.get("completed", False)
+                            
+                            # 3. Milestone Logic: If the whole milestone is 'done', force the visual check
+                            # Otherwise, use the individual task completion status
+                            status = ms_data.get('status', 'to do').lower()
+                            default_checked_value = True if status == 'done' else is_task_done_in_json
+
+                            # 4. The Checkbox
+                            is_checked = st.checkbox(
+                                "Mark as complete", 
+                                value=default_checked_value,
+                                key=task_status_key,
+                                label_visibility="collapsed",
+                                disabled=(status == 'done') # Prevent unchecking if the milestone itself is marked 'done'
+                            )
+
+                            # 5. Persistence: Update JSON if user toggles an 'In Progress' task
+                            if status != 'done' and is_checked != is_task_done_in_json:
+                                ms_data["tasks"][t_idx]["completed"] = is_checked
+                                st.rerun()
+
+                            # 6. UI Rendering (Strikethrough logic)
+                            task_display_name = task['name']
+                            if is_checked:
+                                task_display_name = f"~~{task_display_name}~~"
+                                task_icon = "✅"
+                            else:
+                                task_icon = "🟡" if status == 'in progress' else "🔴"
+                            
+                            st.markdown(f"**{task_icon} {task_display_name}**")
+                            
+                            # Task Description
+                            task_desc = task.get('description', '')
+                            if is_checked and task_desc:
+                                st.caption(f"~~{task_desc}~~")
+                            else:
+                                st.caption(task_desc)
+
+                            # Resources
+                            col_res1, col_res2 = st.columns(2)
+                            if task.get('resources'): 
+                                col_res1.markdown(f"📚 [Read Resource]({task['resources']})")
+                            if task.get('youtube'): 
+                                col_res2.markdown(f"📺 [Watch Video]({task['youtube']})")
+                            
+                            st.write("")
+                        st.divider()
                 else:
                     st.info("Select a milestone from the sidebar or graph to view details.")
 
