@@ -31,7 +31,7 @@ def prepare_context(state: AgentState) -> str:
     raw_history = "\n".join(state.get("research_memory", []))
     word_count = len(raw_history.split())
     original_prompt = state.get("user_prompt", "")
-    TOKEN_THRESHOLD = 1500 
+    TOKEN_THRESHOLD = 150 
 
     if word_count < TOKEN_THRESHOLD:
         return f"ORIGINAL USER REQUEST: {original_prompt}\n\nRAW HISTORY:\n{raw_history}"

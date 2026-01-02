@@ -742,24 +742,51 @@ elif st.session_state.view_mode == "Take Quiz":
 
                 for idx, q in enumerate(quiz.mcq_questions):
                     key = f"mcq_{idx}"
+
+                    # Previously selected answer (A/B/C/D)
                     user_answer = st.session_state.quiz_answers.get(key)
 
-                    st.markdown(f"**{idx+1}. {q.question}**")
+                    st.markdown(f"**{idx + 1}. {q.question}**")
 
-                    st.session_state.quiz_answers[key] = st.radio(
+                    # Prepare radio options (display text)
+                    option_keys = list(q.options.keys())  # ["A", "B", "C", "D"]
+                    option_labels = [
+                        f"{k}: {q.options[k]}" for k in option_keys
+                    ]
+
+                    # Map previous answer to index
+                    selected_index = (
+                        option_keys.index(user_answer)
+                        if user_answer in option_keys
+                        else None
+                    )
+
+                    selected_label = st.radio(
                         "Select Option",
-                        q.options,
-                        index=q.options.index(user_answer) if user_answer in q.options else None,
+                        option_labels,
+                        index=selected_index,
                         key=key,
                         disabled=submitted,
                         label_visibility="collapsed"
                     )
+
+                    # Store ONLY the option key (A/B/C/D)
+                    if selected_label:
+                        st.session_state.quiz_answers[key] = selected_label.split(":")[0]
+
                     # ----- RESULT (AFTER SUBMISSION) -----
                     if submitted and results:
                         r = results["mcq_results"][idx]
 
                         border = "green" if r["is_correct"] else "red"
                         icon = "✅" if r["is_correct"] else "❌"
+
+                        user_key = user_answer
+                        user_text = (
+                            q.options.get(user_key, "No answer")
+                            if user_key
+                            else "No answer"
+                        )
 
                         reasoning_html = (
                             "<i>Correct answer!</i>"
@@ -775,7 +802,7 @@ elif st.session_state.view_mode == "Take Quiz":
                                 padding:10px;
                                 margin-top:6px;
                             ">
-                            {icon} <b>Your answer:</b> {user_answer}<br>
+                            {icon} <b>Your answer:</b> {user_key}: {user_text}<br>
                             {reasoning_html}
                             </div>
                             """,
@@ -783,6 +810,7 @@ elif st.session_state.view_mode == "Take Quiz":
                         )
 
                     st.write("")
+
 
                 # ---------- ARTICLES ----------
                 if quiz.article_questions:

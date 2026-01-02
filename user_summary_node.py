@@ -13,7 +13,7 @@ def debug(msg):
 
 
 # --------------------------------------------------
-# Utilities
+# Utilities       يا رب يشتغل
 # --------------------------------------------------
 
 def merge_user_answers(quiz: dict, user_answers: dict):
@@ -26,36 +26,25 @@ def merge_user_answers(quiz: dict, user_answers: dict):
     return quiz
 
 
-def normalize_answer(value):
+def normalize_mcq_key(value):
+    """
+    Normalizes MCQ answers to a single uppercase letter (A-D).
+    """
     if value is None:
         return None
 
-    # Convert to string
     value = str(value)
-
-    # Unicode normalization
     value = unicodedata.normalize("NFKC", value)
-
-    # Strip whitespace
-    value = value.strip()
-
-    # Case normalization
-    value = value.lower()
+    value = value.strip().upper()
 
     return value
 
 
 def parse_llm_json(response: str) -> dict:
-    """
-    Extracts and parses the first JSON object found in an LLM response.
-    """
-
-    # Remove markdown code fences if present
     response = response.strip()
     response = re.sub(r"^```(json)?", "", response)
     response = re.sub(r"```$", "", response)
 
-    # Extract JSON object
     match = re.search(r"\{[\s\S]*\}", response)
     if not match:
         raise ValueError("No JSON object found in LLM response")
@@ -68,17 +57,12 @@ def parse_llm_json(response: str) -> dict:
 # --------------------------------------------------
 
 def grade_article(llm, question: str, model_answer: str, user_answer: str):
-    """
-    Grades an article-style answer using the LLM without a provided model answer.
-    The LLM infers the expected answer from the question itself.
-    """
-
     prompt = f"""
 You are an educational evaluator.
 
 Your task:
-1. Infer what a high-quality answer to the question should contain.
-2. Compare the user's answer against that inferred ideal.
+1. Use the model answer as the ideal reference.
+2. Compare the user's answer against it.
 3. Grade the answer from 0 to 3 using the rubric below.
 
 GRADING RUBRIC:
@@ -96,51 +80,48 @@ Model answer:
 User answer:
 {user_answer}
 
-Return ONLY valid JSON in the following format:
+Return ONLY valid JSON:
 {{
-  "score": <integer between 0 and 3>,
-  "reasoning": "<brief explanation for the user to explain to they why this score was given to their answer and what the ideal answer is>"
+  "score": <integer 0-3>,
+  "reasoning": "<brief explanation for the user explaining the score and what a good answer should include>"
 }}
 """
 
     response = llm.invoke(prompt).content.strip()
-    debug(f"LLM response for grading article: {response}")
+    # debug(f"LLM response for grading article:\n{response}")
 
     try:
         data = parse_llm_json(response)
-        score = int(data.get("score", 0))
-        score = max(0, min(3, score))
+        score = max(0, min(3, int(data.get("score", 0))))
         reasoning = data.get("reasoning", "No reasoning provided.")
-    except Exception:
-        # Fail-safe in case the LLM output is malformed
+    except Exception as e:
         debug(f"JSON parsing failed: {e}")
         score = 0
         reasoning = "Failed to evaluate the answer due to invalid model output."
 
     return score, reasoning
 
-def mcq_wrong_reasoning(llm, question, correct, user_answer):
-    prompt = f"""
-You are an educational assistant providing feedback to a student.
 
-Task:
-- Explain to the student why their selected answer is incorrect based on the provided model answer.
+def mcq_wrong_reasoning(llm, question, correct_key, options, user_key):
+    prompt = f"""
+You are an educational assistant providing feedback to a student's wrong answer.
+
+Rules:
 - Speak directly to the student.
-- Use only the information in the question and the model answer.
-- Avoid adding any external facts or making assumptions not in the question.
-- Keep it concise, clear, and to the point (1-2 sentences).
-- Don't use any introductions or Hey there, be direct and to the point.
+- Explain why the correct answer is right.
+- Be concise and educational (1-2 sentences).
+- No introductions.
 
 Question:
 {question}
 
-Model answer:
-{correct}
+Correct answer:
+{correct_key}: {options[correct_key]}
 
-Student's answer:
-{user_answer}
+User's incorrect answer:
+{user_key if user_key is not None else "No answer provided"}: {options.get(user_key, "No answer provided")}
 
-Provide your explanation directly to the student.
+Provide feedback explaining why the correct answer is right.
 """
     return llm.invoke(prompt).content.strip()
 
@@ -151,10 +132,10 @@ User quiz results:
 
 Score: {score}/{total}
 
-Strong areas:
+Strong skills:
 {strong}
 
-Weak areas:
+Weak skills:
 {weak}
 
 Generate a concise learning summary with:
@@ -173,11 +154,10 @@ Generate a concise learning summary with:
 def user_summary_node(state):
 
     llm = Config.get_ollama_llm()
-    # submission = read_last_json(SUBMISSION_DIR)
+
     submission = state.get("user_submission")
     if not submission:
         raise ValueError("No user submission found in AgentState")
-
 
     quiz = merge_user_answers(
         submission["quiz"],
@@ -201,12 +181,10 @@ def user_summary_node(state):
     for q in quiz.get("mcq_questions", []):
         total_points += 1
 
-        correct = q["correct_answer"]
-        user = q.get("user_answer")
-        norm_user = normalize_answer(user)
-        norm_correct = normalize_answer(correct)
+        correct_key = normalize_mcq_key(q["correct_answer"])
+        user_key = normalize_mcq_key(q.get("user_answer"))
 
-        if norm_user == norm_correct:
+        if user_key == correct_key:
             earned_points += 1
             strong.append(q["skill"])
             results["mcq_results"].append({
@@ -217,9 +195,13 @@ def user_summary_node(state):
         else:
             weak.append(q["skill"])
             reasoning = None
-            if user is not None:
+            if user_key:
                 reasoning = mcq_wrong_reasoning(
-                    llm, q["question"], correct, user
+                    llm,
+                    q["question"],
+                    correct_key,
+                    q["options"],
+                    user_key
                 )
 
             results["mcq_results"].append({
@@ -239,10 +221,10 @@ def user_summary_node(state):
             score, reasoning = 0, "No answer submitted."
         else:
             score, reasoning = grade_article(
-                llm= llm,
-                question= q["question"],
-                model_answer= q["model_answer"],
-                user_answer= user
+                llm,
+                q["question"],
+                q["model_answer"],
+                user
             )
 
         earned_points += score
@@ -277,7 +259,7 @@ def user_summary_node(state):
         "feedback": summary_text
     }
 
-    # Persist      ابقي شيلها بعدين 
+    # Persist (temporary)
     (SUBMISSION_DIR / "user_profile_summary.json").write_text(
         json.dumps(results, indent=2),
         encoding="utf-8"
