@@ -561,20 +561,19 @@ if st.session_state.view_mode == "Dashboard":
                     st.write("🔍 Researching...")
 
         # Toolbar Buttons (Responsive)
-        tool_c1, tool_c2, tool_c3, tool_c4, tool_c5 = st.columns(5)
+        # Speech button removed here as requested
+        tool_c1, tool_c2, tool_c3, tool_c4 = st.columns(4)
+        
         with tool_c1:
-            if st.button("🎤 Speech", help="Voice Input", use_container_width=True):
-                st.toast("Voice input coming soon!")
-        with tool_c2:
             if st.button("🔍 Search", help="Web Search", use_container_width=True):
                 search_modal()
-        with tool_c3:
+        with tool_c2:
             if st.button("📂 Upload", help="Upload Docs", use_container_width=True):
                 doc_modal()
-        with tool_c4:
+        with tool_c3:
             if st.button("🎬 Video", help="Generate AI Video", use_container_width=True):
                 video_modal()
-        with tool_c5:
+        with tool_c4:
             if st.button("🎨 Notes", help="Generate Visual Notes", use_container_width=True):
                 notes_modal()
 
