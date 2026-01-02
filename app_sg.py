@@ -194,7 +194,6 @@ if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None 
 if "file_vectorstore" not in st.session_state:
     st.session_state.file_vectorstore = None
-    st.session_state.vectorstore = None
 if "search_query" not in st.session_state:
     st.session_state.search_query = ""
 if "is_searching" not in st.session_state:
@@ -214,6 +213,8 @@ if "generated_video" not in st.session_state:
     st.session_state.generated_video = None
 if "generated_notes" not in st.session_state:
     st.session_state.generated_notes = []
+if "kb_indexed" not in st.session_state:
+    st.session_state.kb_indexed = False
 
 # --- FUNCTIONS ---
 def switch_view(view_name):
@@ -262,29 +263,55 @@ def search_modal():
 def doc_modal():
     st.caption("Upload documents to provide context for the AI.")
     st.markdown("##### 📄 Context Documents")
-    uploaded_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
-    if uploaded_docs:
-        if st.button("Process & Index Documents", use_container_width=True, type="primary"):
-            with st.spinner("Indexing Knowledge Base..."):
-                for uploaded_doc in uploaded_docs:
-                    if uploaded_doc.name not in st.session_state.uploaded_docs:
-                        file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
-                        with open(file_path, "wb") as f:
-                            f.write(uploaded_doc.getbuffer())
-                        st.session_state.uploaded_docs[uploaded_doc.name] = file_path
-                
-                embeddings = OllamaEmbeddings(model="nomic-embed-text")
-                chunk_docs = []
-                file_docs = []
-                for path in st.session_state.uploaded_docs.values():
-                    chunks, file_summary = ingest_pdf(path)
-                    chunk_docs.extend(chunks)
-                    file_docs.append(file_summary)
-                
-                st.session_state.vectorstore = FAISS.from_documents(chunk_docs, embeddings)
-                st.session_state.file_vectorstore = FAISS.from_documents(file_docs, embeddings)
+
+    uploaded_docs = st.file_uploader(
+        "Upload PDFs",
+        type=["pdf"],
+        accept_multiple_files=True
+    )
+
+    if uploaded_docs and st.button(
+        "Process & Index Documents",
+        use_container_width=True,
+        type="primary"
+    ):
+        with st.spinner("Indexing Knowledge Base..."):
+
+            embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
+            chunk_docs = []
+            file_docs = []
+
+            for uploaded_doc in uploaded_docs:
+                if uploaded_doc.name not in st.session_state.uploaded_docs:
+                    file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_doc.getbuffer())
+                    st.session_state.uploaded_docs[uploaded_doc.name] = file_path
+
+            for path in st.session_state.uploaded_docs.values():
+                chunks, file_summary = ingest_pdf(path)
+                chunk_docs.extend(chunks)
+                file_docs.append(file_summary)
+
+            st.session_state.vectorstore = FAISS.from_documents(
+                chunk_docs, embeddings
+            )
+            st.session_state.file_vectorstore = FAISS.from_documents(
+                file_docs, embeddings
+            )
+
+            st.session_state.kb_indexed = True
+
             st.success("✅ Documents Indexed Successfully!")
-            st.rerun()
+
+            print(
+                "Successfully indexed documents:",
+                list(st.session_state.uploaded_docs.keys())
+            )
+if st.session_state.kb_indexed:
+    st.session_state.kb_indexed = False
+    st.rerun()
 
 
 @st.dialog("Generate Study Video")

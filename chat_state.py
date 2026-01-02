@@ -32,19 +32,19 @@ class MCQ(BaseModel):
 class ArticleQuestion(BaseModel):
     question: str = Field(..., description="The article question")
     skill: str = Field(..., description="The skill being tested")
-    answer: str = Field(..., description="The article answer")
+    model_answer: str = Field(..., description="The article question model answer")
 
-class CodingQuestion(BaseModel):
-    question: str = Field(..., description="The coding question")
-    code_snippet: str = Field(..., description="The code snippet")
-    explanation: str = Field(..., description="Explanation of the code snippet")
+# class CodingQuestion(BaseModel):
+#     question: str = Field(..., description="The coding question")
+#     code_snippet: str = Field(..., description="The code snippet")
+#     explanation: str = Field(..., description="Explanation of the code snippet")
 
 class Quiz(BaseModel):
     topic: str = Field(..., description="The topic of the quiz")
     proficiency_level: str = Field(..., description="The proficiency level")
     mcq_questions: List[MCQ] = Field(..., description="List of MCQs")
     article_questions: List[ArticleQuestion] = Field(..., description="List of article questions")
-    coding_questions: List[CodingQuestion] = Field(..., description="List of coding questions")
+    # coding_questions: List[CodingQuestion] = Field(..., description="List of coding questions")
 
 
 class AgentState(TypedDict):

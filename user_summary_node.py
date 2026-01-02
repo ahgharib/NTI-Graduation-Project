@@ -3,6 +3,7 @@ from config import Config
 import json
 from pathlib import Path
 from typing import Dict, Any
+import unicodedata
 import re
 
 SUBMISSION_DIR = Path("quiz_submissions")
@@ -23,6 +24,25 @@ def merge_user_answers(quiz: dict, user_answers: dict):
         q["user_answer"] = user_answers.get(f"article_{i}")
 
     return quiz
+
+
+def normalize_answer(value):
+    if value is None:
+        return None
+
+    # Convert to string
+    value = str(value)
+
+    # Unicode normalization
+    value = unicodedata.normalize("NFKC", value)
+
+    # Strip whitespace
+    value = value.strip()
+
+    # Case normalization
+    value = value.lower()
+
+    return value
 
 
 def parse_llm_json(response: str) -> dict:
@@ -47,7 +67,7 @@ def parse_llm_json(response: str) -> dict:
 # LLM helpers
 # --------------------------------------------------
 
-def grade_article(llm, question: str, user_answer: str):
+def grade_article(llm, question: str, model_answer: str, user_answer: str):
     """
     Grades an article-style answer using the LLM without a provided model answer.
     The LLM infers the expected answer from the question itself.
@@ -69,6 +89,9 @@ GRADING RUBRIC:
 
 Question:
 {question}
+
+Model answer:
+{model_answer}
 
 User answer:
 {user_answer}
@@ -101,17 +124,17 @@ def mcq_wrong_reasoning(llm, question, correct, user_answer):
 You are an educational assistant providing feedback to a student.
 
 Task:
-- Explain to the student why their selected answer is incorrect.
+- Explain to the student why their selected answer is incorrect based on the provided model answer.
 - Speak directly to the student.
-- Use only the information in the question and the correct answer.
+- Use only the information in the question and the model answer.
 - Avoid adding any external facts or making assumptions not in the question.
-- Keep it concise, clear, and helpful (1-2 sentences).
+- Keep it concise, clear, and to the point (1-2 sentences).
 - Don't use any introductions or Hey there, be direct and to the point.
 
 Question:
 {question}
 
-Correct answer:
+Model answer:
 {correct}
 
 Student's answer:
@@ -180,17 +203,19 @@ def user_summary_node(state):
 
         correct = q["correct_answer"]
         user = q.get("user_answer")
+        norm_user = normalize_answer(user)
+        norm_correct = normalize_answer(correct)
 
-        if user == correct:
+        if norm_user == norm_correct:
             earned_points += 1
-            strong.append(q["question"])
+            strong.append(q["skill"])
             results["mcq_results"].append({
                 "question": q["question"],
                 "is_correct": True,
                 "reasoning": None
             })
         else:
-            weak.append(q["question"])
+            weak.append(q["skill"])
             reasoning = None
             if user is not None:
                 reasoning = mcq_wrong_reasoning(
@@ -214,17 +239,18 @@ def user_summary_node(state):
             score, reasoning = 0, "No answer submitted."
         else:
             score, reasoning = grade_article(
-                llm,
-                q["question"],
-                user
+                llm= llm,
+                question= q["question"],
+                model_answer= q["model_answer"],
+                user_answer= user
             )
 
         earned_points += score
 
         if score >= 2:
-            strong.append(q["question"])
+            strong.append(q["skill"])
         else:
-            weak.append(q["question"])
+            weak.append(q["skill"])
 
         results["article_results"].append({
             "question": q["question"],

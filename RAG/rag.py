@@ -22,8 +22,8 @@ def load_vectorstore():
         allow_dangerous_deserialization=True
     )
 
-def get_context_chunks(query: str, k: int = 5):      ### vectorstore is now in st.session_state
-    # vectorstore = load_vectorstore()               ### it's not saved locally anymore
+def get_context_chunks(query: str, k: int = 5):      
+    # vectorstore = load_vectorstore()               
     vectorstore = st.session_state.vectorstore
     if vectorstore is None:
         return ""

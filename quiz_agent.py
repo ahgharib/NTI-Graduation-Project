@@ -24,10 +24,10 @@ def quiz_node(state: AgentState):
     # We use Gemini for structured quiz generation as in your config
 
     
-    llm = Config.get_gemini_llm().with_structured_output(Quiz)
-    # llm = Config.get_ollama_llm().with_structured_output(Quiz)
+    # llm = Config.get_gemini_llm().with_structured_output(Quiz)
+    llm = Config.get_ollama_llm().with_structured_output(Quiz)
     
-    
+    # print("########### DOCUMENT CONTEXT #############\n", document_context)
 
     prompt = f"""
     You are an expert educator and assessment designer.
@@ -57,9 +57,8 @@ def quiz_node(state: AgentState):
     4. Do NOT invent facts or questions not supported by the provided sources.
     5. Ensure all questions are accurate, unambiguous, and educational.
     6. Follow the Quiz schema exactly:
-    - MCQs
+    - MCQs (4 options each - one correct)
     - Article questions
-    - Coding questions
     """    
     
     quiz_output = llm.invoke(prompt)
