@@ -23,7 +23,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Keep this for browser metadata, but we will add a visible title below
 st.set_page_config(layout="wide", page_title="Student Partner AI", page_icon="🎓")
 
-# --- 🎨 CSS (KEPT AS REQUESTED - GRADIENT ANIMATION) ---
+# --- 🎨 FUTURE & MODERN CSS ---
 st.markdown("""
     <style>
         /* 1. KEYFRAMES */
@@ -170,7 +170,7 @@ st.markdown("""
         [data-testid="stFileUploader"] section { padding: 0.5rem; border-color: rgba(0, 240, 255, 0.2); }
         hr { margin-top: 0; margin-bottom: 2rem; border: none; height: 1px; background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.5), transparent); }
         
-        /* HIDE DEFAULT SIDEBAR NAV */
+        /* --- !!! ADDED TO HIDE DEFAULT SIDEBAR NAV !!! --- */
         [data-testid="stSidebarNav"] {
             display: none !important;
         }
@@ -194,7 +194,6 @@ if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None 
 if "file_vectorstore" not in st.session_state:
     st.session_state.file_vectorstore = None
-    st.session_state.vectorstore = None
 if "search_query" not in st.session_state:
     st.session_state.search_query = ""
 if "is_searching" not in st.session_state:
@@ -214,6 +213,8 @@ if "generated_video" not in st.session_state:
     st.session_state.generated_video = None
 if "generated_notes" not in st.session_state:
     st.session_state.generated_notes = []
+if "kb_indexed" not in st.session_state:
+    st.session_state.kb_indexed = False
 
 # --- FUNCTIONS ---
 def switch_view(view_name):
@@ -261,52 +262,56 @@ def search_modal():
 @st.dialog("Knowledge Base")
 def doc_modal():
     st.caption("Upload documents to provide context for the AI.")
-    
-    # --- HISTORY SECTION ---
-    st.markdown("##### 📂 Upload History")
-    if st.session_state.uploaded_docs:
-        # Display history in a scrollable container
-        with st.container(height=150, border=True):
-            for filename in st.session_state.uploaded_docs.keys():
-                st.text(f"📄 {filename}")
-    else:
-        st.info("No documents uploaded yet.")
+    st.markdown("##### 📄 Context Documents")
 
-    st.divider()
+    uploaded_docs = st.file_uploader(
+        "Upload PDFs",
+        type=["pdf"],
+        accept_multiple_files=True
+    )
 
-    # --- UPLOAD SECTION ---
-    st.markdown("##### ➕ Add New Documents")
-    
-    # --- WARNING MESSAGE ---
-    st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
-    
-    uploaded_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True, label_visibility="collapsed")
-    
-    if uploaded_docs:
-        if st.button("Process & Index Documents", use_container_width=True, type="primary"):
-            with st.spinner("Indexing Knowledge Base..."):
-                for uploaded_doc in uploaded_docs:
-                    if uploaded_doc.name not in st.session_state.uploaded_docs:
-                        file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
-                        with open(file_path, "wb") as f:
-                            f.write(uploaded_doc.getbuffer())
-                        st.session_state.uploaded_docs[uploaded_doc.name] = file_path
-                
-                embeddings = OllamaEmbeddings(model="nomic-embed-text")
-                chunk_docs = []
-                file_docs = []
-                for path in st.session_state.uploaded_docs.values():
-                    chunks, file_summary = ingest_pdf(path)
-                    chunk_docs.extend(chunks)
-                    file_docs.append(file_summary)
-                
-                st.session_state.vectorstore = FAISS.from_documents(chunk_docs, embeddings)
-                st.session_state.file_vectorstore = FAISS.from_documents(file_docs, embeddings)
-            
-            # --- DONE MESSAGE ---
-            st.success("✅ Done! Documents Indexed Successfully!")
-            time.sleep(2)
-            st.rerun()
+    if uploaded_docs and st.button(
+        "Process & Index Documents",
+        use_container_width=True,
+        type="primary"
+    ):
+        with st.spinner("Indexing Knowledge Base..."):
+
+            embeddings = OllamaEmbeddings(model="nomic-embed-text")
+
+            chunk_docs = []
+            file_docs = []
+
+            for uploaded_doc in uploaded_docs:
+                if uploaded_doc.name not in st.session_state.uploaded_docs:
+                    file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_doc.getbuffer())
+                    st.session_state.uploaded_docs[uploaded_doc.name] = file_path
+
+            for path in st.session_state.uploaded_docs.values():
+                chunks, file_summary = ingest_pdf(path)
+                chunk_docs.extend(chunks)
+                file_docs.append(file_summary)
+
+            st.session_state.vectorstore = FAISS.from_documents(
+                chunk_docs, embeddings
+            )
+            st.session_state.file_vectorstore = FAISS.from_documents(
+                file_docs, embeddings
+            )
+
+            st.session_state.kb_indexed = True
+
+            st.success("✅ Documents Indexed Successfully!")
+
+            print(
+                "Successfully indexed documents:",
+                list(st.session_state.uploaded_docs.keys())
+            )
+if st.session_state.kb_indexed:
+    st.session_state.kb_indexed = False
+    st.rerun()
 
 
 @st.dialog("Generate Study Video")
@@ -314,9 +319,6 @@ def video_modal():
     st.caption("Generate an AI video based on a topic.")
     with st.form("video_form"):
         video_topic = st.text_input("Topic for video", placeholder="e.g. Transformers")
-        # --- WARNING MESSAGE ---
-        st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
-        
         submit_video = st.form_submit_button("Generate Video", type="primary")
         
         if submit_video and video_topic:
@@ -343,9 +345,7 @@ def video_modal():
                             for chunk in dl.iter_content(chunk_size=1024*1024): f.write(chunk)
                     
                     st.session_state.generated_video = video_path
-                    # --- DONE MESSAGE ---
-                    st.success("✅ Done! Video generated successfully.")
-                    time.sleep(2) # Wait so user can see the message
+                    st.success("Video Ready!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Generation failed: {e}")
@@ -355,9 +355,6 @@ def notes_modal():
     st.caption("Create summarized visual pages for a topic.")
     with st.form("notes_form"):
         notes_topic = st.text_input("Topic for notes", placeholder="e.g. FastAPI Basics")
-        # --- WARNING MESSAGE ---
-        st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
-        
         submit_notes = st.form_submit_button("Generate Notes", type="primary")
         
         if submit_notes and notes_topic:
@@ -374,9 +371,7 @@ def notes_modal():
                                 f.write(base64.b64decode(img_b64))
                             saved_paths.append(path)
                         st.session_state.generated_notes = saved_paths
-                        # --- DONE MESSAGE ---
-                        st.success("✅ Done! Notes generated successfully.")
-                        time.sleep(2) # Wait so user can see the message
+                        st.success("Notes generated!")
                         st.rerun()
                     else:
                         st.error(f"Error: {response.text}")
@@ -836,24 +831,51 @@ elif st.session_state.view_mode == "Take Quiz":
 
                 for idx, q in enumerate(quiz.mcq_questions):
                     key = f"mcq_{idx}"
+
+                    # Previously selected answer (A/B/C/D)
                     user_answer = st.session_state.quiz_answers.get(key)
 
-                    st.markdown(f"**{idx+1}. {q.question}**")
+                    st.markdown(f"**{idx + 1}. {q.question}**")
 
-                    st.session_state.quiz_answers[key] = st.radio(
+                    # Prepare radio options (display text)
+                    option_keys = list(q.options.keys())  # ["A", "B", "C", "D"]
+                    option_labels = [
+                        f"{k}: {q.options[k]}" for k in option_keys
+                    ]
+
+                    # Map previous answer to index
+                    selected_index = (
+                        option_keys.index(user_answer)
+                        if user_answer in option_keys
+                        else None
+                    )
+
+                    selected_label = st.radio(
                         "Select Option",
-                        q.options,
-                        index=q.options.index(user_answer) if user_answer in q.options else None,
+                        option_labels,
+                        index=selected_index,
                         key=key,
                         disabled=submitted,
                         label_visibility="collapsed"
                     )
+
+                    # Store ONLY the option key (A/B/C/D)
+                    if selected_label:
+                        st.session_state.quiz_answers[key] = selected_label.split(":")[0]
+
                     # ----- RESULT (AFTER SUBMISSION) -----
                     if submitted and results:
                         r = results["mcq_results"][idx]
 
                         border = "green" if r["is_correct"] else "red"
                         icon = "✅" if r["is_correct"] else "❌"
+
+                        user_key = user_answer
+                        user_text = (
+                            q.options.get(user_key, "No answer")
+                            if user_key
+                            else "No answer"
+                        )
 
                         reasoning_html = (
                             "<i>Correct answer!</i>"
@@ -869,7 +891,7 @@ elif st.session_state.view_mode == "Take Quiz":
                                 padding:10px;
                                 margin-top:6px;
                             ">
-                            {icon} <b>Your answer:</b> {user_answer}<br>
+                            {icon} <b>Your answer:</b> {user_key}: {user_text}<br>
                             {reasoning_html}
                             </div>
                             """,
@@ -877,6 +899,7 @@ elif st.session_state.view_mode == "Take Quiz":
                         )
 
                     st.write("")
+
 
                 # ---------- ARTICLES ----------
                 if quiz.article_questions:

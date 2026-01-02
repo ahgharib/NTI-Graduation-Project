@@ -1,6 +1,6 @@
 import json
 import operator
-from typing import TypedDict, List, Optional, Dict, Any, Annotated
+from typing import TypedDict, List, Optional, Dict, Any, Annotated , Literal
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
@@ -26,25 +26,19 @@ class ProjectPlan(BaseModel):
 class MCQ(BaseModel):
     question: str = Field(..., description="The multiple-choice question")
     skill: str = Field(..., description="The skill being tested")
-    options: List[str] = Field(..., description="List of answer options")
-    correct_answer: str = Field(..., description="The correct answer from the options")
+    options: Dict[Literal["A", "B", "C", "D"],str] = Field(..., description="Answer options keyed by letters (A, B, C, D)")
+    correct_answer: Literal["A", "B", "C", "D"] = Field(..., description="The correct option key (A, B, C, or D)")
 
 class ArticleQuestion(BaseModel):
     question: str = Field(..., description="The article question")
     skill: str = Field(..., description="The skill being tested")
-    answer: str = Field(..., description="The article answer")
-
-class CodingQuestion(BaseModel):
-    question: str = Field(..., description="The coding question")
-    code_snippet: str = Field(..., description="The code snippet")
-    explanation: str = Field(..., description="Explanation of the code snippet")
+    model_answer: str = Field(..., description="The article question model answer")
 
 class Quiz(BaseModel):
     topic: str = Field(..., description="The topic of the quiz")
     proficiency_level: str = Field(..., description="The proficiency level")
     mcq_questions: List[MCQ] = Field(..., description="List of MCQs")
     article_questions: List[ArticleQuestion] = Field(..., description="List of article questions")
-    coding_questions: List[CodingQuestion] = Field(..., description="List of coding questions")
 
 
 class AgentState(TypedDict):

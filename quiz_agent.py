@@ -4,6 +4,9 @@ from chat_tools import web_search_tool
 from log import prepare_context, universal_debug_log
 from langchain_core.messages import HumanMessage
 from RAG.rag import get_context_chunks
+import json
+from pathlib import Path
+
 
 def quiz_node(state: AgentState):
     node_name = "QUIZ_AGENT"
@@ -24,10 +27,11 @@ def quiz_node(state: AgentState):
     # We use Gemini for structured quiz generation as in your config
 
     
-    llm = Config.get_gemini_llm().with_structured_output(Quiz)
+    # llm = Config.get_gemini_llm().with_structured_output(Quiz)
     # llm = Config.get_ollama_llm().with_structured_output(Quiz)
+    llm = Config.get_groq_llm().with_structured_output(Quiz)
     
-    
+    # print("########### DOCUMENT CONTEXT #############\n", document_context)
 
     prompt = f"""
     You are an expert educator and assessment designer.
@@ -57,14 +61,31 @@ def quiz_node(state: AgentState):
     4. Do NOT invent facts or questions not supported by the provided sources.
     5. Ensure all questions are accurate, unambiguous, and educational.
     6. Follow the Quiz schema exactly:
-    - MCQs
+    - MCQs 4 options with one correct option
+    - The correct answer must be one of the provided options
     - Article questions
-    - Coding questions
     """    
     
     quiz_output = llm.invoke(prompt)
     # universal_debug_log(node_name, "QUIZ_GENERATED", quiz_output.dict())
-    
+    SUBMISSION_DIR = Path(
+    "/teamspace/studios/this_studio/NTI-Graduation-Project/quiz_submissions"
+    )
+    SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
+    safe_topic = quiz_output.topic.replace(" ", "_").lower()
+    file_name = f"quiz_{safe_topic}.json"
+
+    file_path = SUBMISSION_DIR / file_name
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(
+            quiz_output.dict(),
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+
+
     return {
         "quiz_output": quiz_output,
         "messages": [HumanMessage(content=f"Generated quiz for {quiz_output.topic}", name="QuizAgent")],

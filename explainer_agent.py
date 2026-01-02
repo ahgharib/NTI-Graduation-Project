@@ -16,7 +16,7 @@ def explainer_node(state: AgentState):
     
     # Logic from your provided Explainer: Search + Explain
     # We use Groq/Gemini as per your architecture in Config
-    llm = Config.get_groq_llm()
+    llm = Config.get_gemini_llm()
     
     # Perform internal research if needed
     research = web_search_tool.invoke(instruction)
@@ -44,17 +44,16 @@ def explainer_node(state: AgentState):
 
     --- INSTRUCTIONS ---
     1. Prefer explaining using the DOCUMENT CONTEXT when available.
-    2. If information comes from a document:
+    2. If the user asked for information from a specific document/page, prioritize that.
+    3. If information comes from a document:
     - Explicitly cite: File name + page number.
-    3. If information comes from web search:
+    4. If information comes from web search:
     - Explicitly state that it was web-sourced.
-    4. If knowledge is general:
+    5. If knowledge is general:
     - Say it is general domain knowledge.
-    5. Do NOT hallucinate references.
-    6. if the User selected a Specific Milestone then the User wants you to focus on this milestone or a task in this milestone then you Should search for the Milestone in the "Entire Roadmap" above based on the ID and Tailor your Answer to this milestone
+    6. Do NOT hallucinate references.
     7. Explain clearly, step-by-step, and concisely.
-    """
-
+    """   
     response = llm.invoke(prompt)
     # universal_debug_log(node_name, "OUTPUT", response.content)
     

@@ -14,12 +14,21 @@ def summarizer_node(state: AgentState):
     # 2. Get Conversation History
     context = prepare_context(state)
     
-    # 3. Initialize Ollama (Llama 3)
-    llm = Config.get_ollama_llm()
+    # 3. Initialize the LLM
+    llm = Config.get_gemini_llm()
     
     # 4. Construct Prompt
     prompt = f"""
     You are an expert Summarizer and Simplifier.
+    
+    YOUR TASK:
+    - Provide a clear, high-quality summary based on the user's request.
+    - If the user asks to summarize a specific document/page, prioritize the 'DOCUMENT CONTEXT'.
+    - If the user asks for a summary of a specific page number, use the chuncks from that page in the 'DOCUMENT CONTEXT'.
+    - If the user provides raw text in the instruction, summarize that.
+    - If the user asks for an overview of a complex topic, simplify it.
+    - Do NOT add external information unless necessary for clarity.
+    - Keep the tone helpful and objective.
     
     USER INSTRUCTION:
     {instruction}
@@ -30,13 +39,6 @@ def summarizer_node(state: AgentState):
     CONVERSATION HISTORY:
     {context}
     
-    YOUR TASK:
-    - Provide a clear, high-quality summary based on the user's request.
-    - If the user asks to summarize a specific document/page, prioritize the 'DOCUMENT CONTEXT'.
-    - If the user provides raw text in the instruction, summarize that.
-    - If the user asks for an overview of a complex topic, simplify it.
-    - Do NOT add external information unless necessary for clarity.
-    - Keep the tone helpful and objective.
     """
     
     # 5. Invoke LLM
