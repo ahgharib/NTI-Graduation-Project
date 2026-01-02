@@ -23,7 +23,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Keep this for browser metadata, but we will add a visible title below
 st.set_page_config(layout="wide", page_title="Student Partner AI", page_icon="🎓")
 
-# --- 🎨 FUTURE & MODERN CSS ---
+# --- 🎨 CSS (KEPT AS REQUESTED - GRADIENT ANIMATION) ---
 st.markdown("""
     <style>
         /* 1. KEYFRAMES */
@@ -170,7 +170,7 @@ st.markdown("""
         [data-testid="stFileUploader"] section { padding: 0.5rem; border-color: rgba(0, 240, 255, 0.2); }
         hr { margin-top: 0; margin-bottom: 2rem; border: none; height: 1px; background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.5), transparent); }
         
-        /* --- !!! ADDED TO HIDE DEFAULT SIDEBAR NAV !!! --- */
+        /* HIDE DEFAULT SIDEBAR NAV */
         [data-testid="stSidebarNav"] {
             display: none !important;
         }
@@ -261,8 +261,27 @@ def search_modal():
 @st.dialog("Knowledge Base")
 def doc_modal():
     st.caption("Upload documents to provide context for the AI.")
-    st.markdown("##### 📄 Context Documents")
-    uploaded_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
+    
+    # --- HISTORY SECTION ---
+    st.markdown("##### 📂 Upload History")
+    if st.session_state.uploaded_docs:
+        # Display history in a scrollable container
+        with st.container(height=150, border=True):
+            for filename in st.session_state.uploaded_docs.keys():
+                st.text(f"📄 {filename}")
+    else:
+        st.info("No documents uploaded yet.")
+
+    st.divider()
+
+    # --- UPLOAD SECTION ---
+    st.markdown("##### ➕ Add New Documents")
+    
+    # --- WARNING MESSAGE ---
+    st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
+    
+    uploaded_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True, label_visibility="collapsed")
+    
     if uploaded_docs:
         if st.button("Process & Index Documents", use_container_width=True, type="primary"):
             with st.spinner("Indexing Knowledge Base..."):
@@ -283,7 +302,10 @@ def doc_modal():
                 
                 st.session_state.vectorstore = FAISS.from_documents(chunk_docs, embeddings)
                 st.session_state.file_vectorstore = FAISS.from_documents(file_docs, embeddings)
-            st.success("✅ Documents Indexed Successfully!")
+            
+            # --- DONE MESSAGE ---
+            st.success("✅ Done! Documents Indexed Successfully!")
+            time.sleep(2)
             st.rerun()
 
 
@@ -292,6 +314,9 @@ def video_modal():
     st.caption("Generate an AI video based on a topic.")
     with st.form("video_form"):
         video_topic = st.text_input("Topic for video", placeholder="e.g. Transformers")
+        # --- WARNING MESSAGE ---
+        st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
+        
         submit_video = st.form_submit_button("Generate Video", type="primary")
         
         if submit_video and video_topic:
@@ -318,7 +343,9 @@ def video_modal():
                             for chunk in dl.iter_content(chunk_size=1024*1024): f.write(chunk)
                     
                     st.session_state.generated_video = video_path
-                    st.success("Video Ready!")
+                    # --- DONE MESSAGE ---
+                    st.success("✅ Done! Video generated successfully.")
+                    time.sleep(2) # Wait so user can see the message
                     st.rerun()
                 except Exception as e:
                     st.error(f"Generation failed: {e}")
@@ -328,6 +355,9 @@ def notes_modal():
     st.caption("Create summarized visual pages for a topic.")
     with st.form("notes_form"):
         notes_topic = st.text_input("Topic for notes", placeholder="e.g. FastAPI Basics")
+        # --- WARNING MESSAGE ---
+        st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
+        
         submit_notes = st.form_submit_button("Generate Notes", type="primary")
         
         if submit_notes and notes_topic:
@@ -344,7 +374,9 @@ def notes_modal():
                                 f.write(base64.b64decode(img_b64))
                             saved_paths.append(path)
                         st.session_state.generated_notes = saved_paths
-                        st.success("Notes generated!")
+                        # --- DONE MESSAGE ---
+                        st.success("✅ Done! Notes generated successfully.")
+                        time.sleep(2) # Wait so user can see the message
                         st.rerun()
                     else:
                         st.error(f"Error: {response.text}")
@@ -553,7 +585,13 @@ if st.session_state.view_mode == "Dashboard":
             with chat_container:
                 st.chat_message("user").write(user_input)
             
-
+            # KEYWORD TRIGGER
+            if "quiz" in user_input.lower():
+                notification_msg = "Go check the quiz page! 📝"
+                st.session_state.chat_history.append({"role": "ai", "content": notification_msg})
+                with chat_container:
+                    st.chat_message("ai").write(notification_msg)
+            else:
                 with st.spinner("Processing..."):
                     history_context = ""
                     if len(st.session_state.chat_history) > 1:
