@@ -37,6 +37,7 @@ class Orchestrator:
         - 'summarizer' relies ONLY on Document Context (RAG) and the text YOU provide in the instruction.
         - IMPORTANT: Workers are STATELESS. They cannot see the chat history. 
         - RULE: If a user request is dependent on previous context (e.g., "Summarize that", "Quiz me on the topic we discussed"), you MUST extract the relevant details from the 'CONTEXT (SUMMARIZED)' section and include them explicitly in the worker's instruction.
+        - RULE: YOU MUST OUTPUT EQUAL NUMBER OF INSTRUCTIONS INSIDE INSTRUCTION LIST TO THE NUMBER OF ACTIONS IN ACTION LIST!
 
         CONTEXT (SUMMARIZED FROM HISTORY):
         ------------------------------------------------
@@ -61,10 +62,17 @@ class Orchestrator:
         Output:
           actions: ["explain_node", "summarizer"]
           instructions: ["Explain the programming concept of recursion with examples.", "Summarize the explanation of recursion provided in the previous step."]
+        
+        Input: "Explain Page 16"
+        Output:
+          actions: ["explain_node"]
+          instructions: ["Explain the concepts of Page 16"]
 
         Notes:
           - You act as the memory for the workers. If the worker needs to know 'what' to summarize or 'what' to quiz, tell them exactly in the instruction.
           - For document-specific requests (e.g., "Page 5"), specify the source so RAG can trigger.
+          - For CONTEXT SUMMARIZED FROM HISTORY: You MUST Think if the User Input is Related to the Current Context or Not, Do not randomlly connect the Context to the User prompt
+          for example: if the User input that he still doesn't understand then you relay on context but if he entered a new topic or asked to explain a page in a doc then you ignore the history
           - Always include the Milestone context if applicable: {milestone_context}
         """
 

@@ -36,6 +36,6 @@ def prepare_context(state: AgentState) -> str:
     if word_count < TOKEN_THRESHOLD:
         return f"ORIGINAL USER REQUEST: {original_prompt}\n\nRAW HISTORY:\n{raw_history}"
 
-    llm = Config.get_groq_llm()
+    llm = Config.get_ollama_llm()
     summary_res = llm.invoke(f"Provide a high-density summary of this research: {raw_history}")
     return f"ORIGINAL USER REQUEST: {original_prompt}\n\nCOMPRESSED RESEARCH CONTEXT: {summary_res.content}"

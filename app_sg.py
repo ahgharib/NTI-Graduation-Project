@@ -1,3 +1,6 @@
+# $env:Path += ";C:\ngrok"
+# ngrok config add-authtoken 37iwj7PX0v9Y0GRgK7fkaidHrVX_87JYLNsYZJzwyS7aDaAJh
+# ngrok http 8501
 import streamlit as st
 import json
 import uuid
@@ -216,6 +219,10 @@ if "generated_notes" not in st.session_state:
 if "kb_indexed" not in st.session_state:
     st.session_state.kb_indexed = False
 
+# ✅ NEW — ONLY ADDITION
+if "show_right_panel" not in st.session_state:
+    st.session_state.show_right_panel = True
+
 # --- FUNCTIONS ---
 def switch_view(view_name):
     st.session_state.view_mode = view_name
@@ -262,13 +269,31 @@ def search_modal():
 @st.dialog("Knowledge Base")
 def doc_modal():
     st.caption("Upload documents to provide context for the AI.")
-    st.markdown("##### 📄 Context Documents")
+    # --- HISTORY SECTION ---
+    st.markdown("##### 📂 Upload History")
+    if st.session_state.uploaded_docs:
+        with st.container(height=200, border=True):
+            for filename, meta in st.session_state.uploaded_docs.items():
+                st.markdown(f"📄 **{filename}**")
 
-    uploaded_docs = st.file_uploader(
-        "Upload PDFs",
-        type=["pdf"],
-        accept_multiple_files=True
-    )
+                if meta.get("summary"):
+                    with st.expander("🧾 View summary"):
+                        st.caption(meta["summary"])
+                else:
+                    st.caption("⏳ Summary not generated yet")
+    else:
+        st.info("No documents uploaded yet.")
+
+
+    st.divider()
+
+    # --- UPLOAD SECTION ---
+    st.markdown("##### ➕ Add New Documents")
+    
+    # --- WARNING MESSAGE ---
+    st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
+    
+    uploaded_docs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True, label_visibility="collapsed")
 
     if uploaded_docs and st.button(
         "Process & Index Documents",
@@ -287,12 +312,27 @@ def doc_modal():
                     file_path = os.path.join(UPLOAD_DIR, uploaded_doc.name)
                     with open(file_path, "wb") as f:
                         f.write(uploaded_doc.getbuffer())
-                    st.session_state.uploaded_docs[uploaded_doc.name] = file_path
+                    st.session_state.uploaded_docs[uploaded_doc.name] = {
+                        "path": file_path,
+                        "summary": None
+                    }
 
-            for path in st.session_state.uploaded_docs.values():
-                chunks, file_summary = ingest_pdf(path)
+
+            for filename, meta in st.session_state.uploaded_docs.items():
+                file_path = meta["path"]
+
+                chunks, file_summary = ingest_pdf(file_path)
+
+                # Store chunks
                 chunk_docs.extend(chunks)
-                file_docs.append(file_summary)
+
+                # Store summary as a Document (for vectorstore)
+                if file_summary:
+                    file_docs.append(file_summary)
+
+                    # ✅ THIS IS THE IMPORTANT PART
+                    st.session_state.uploaded_docs[filename]["summary"] = file_summary.page_content
+
 
             st.session_state.vectorstore = FAISS.from_documents(
                 chunk_docs, embeddings
@@ -319,6 +359,8 @@ def video_modal():
     st.caption("Generate an AI video based on a topic.")
     with st.form("video_form"):
         video_topic = st.text_input("Topic for video", placeholder="e.g. Transformers")
+        # --- WARNING MESSAGE ---
+        st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
         submit_video = st.form_submit_button("Generate Video", type="primary")
         
         if submit_video and video_topic:
@@ -355,6 +397,8 @@ def notes_modal():
     st.caption("Create summarized visual pages for a topic.")
     with st.form("notes_form"):
         notes_topic = st.text_input("Topic for notes", placeholder="e.g. FastAPI Basics")
+        # --- WARNING MESSAGE ---
+        st.caption("⚠️ **Important:** Please do not close this form while processing to prevent cancellation.")
         submit_notes = st.form_submit_button("Generate Notes", type="primary")
         
         if submit_notes and notes_topic:
@@ -486,10 +530,21 @@ with st.container():
 if st.session_state.view_mode == "Dashboard":
     
     # Main Layout: 2 Columns on Desktop, Stacks on Mobile
-    col1, col2 = st.columns([2.5, 1.2])
+    # ✅ MODIFIED LAYOUT (ONLY CHANGE)
+    if st.session_state.show_right_panel:
+        col1, col2 = st.columns([2.5, 1.2])
+    else:
+        col1 = st.container()
+        col2 = None
 
     # LEFT COLUMN: Graph & Chat
     with col1:
+
+        toggle_label = "⏴ Hide Details Panel" if st.session_state.show_right_panel else "⏵ Show Details Panel"
+        if st.button(toggle_label):
+            st.session_state.show_right_panel = not st.session_state.show_right_panel
+            st.rerun()
+
         # Slightly smaller header for this section
         st.markdown("#### 🚀 Roadmap View")
         st.caption("Visualize your path and track progress.")
@@ -649,131 +704,133 @@ if st.session_state.view_mode == "Dashboard":
                         st.error(f"Connection Error: Ensure Ollama is running. ({str(e)})")
 
     # RIGHT COLUMN: Manager & Details
-    with col2:
-        st.write("") 
-        st.write("") 
-        tabs = st.tabs(["📝 Details", "🛠️ Manager"])
-        
-        # TAB 1: Milestone Details
-        with tabs[0]:
-            st.subheader("Milestone Details")
-            detail_container = st.container(height=650)
-            with detail_container:
-                if st.session_state.clicked_node and st.session_state.plan_json:
-                    ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
-                    if ms_data:
-                        st.markdown(f"### {ms_data['title']}")
-                        
-                        # 1. Get and Format Status
-                        status = ms_data.get('status', 'to do').lower()
-                        is_milestone_done = (status == 'done')
-                        
-                        # 2. Assign Color/Icon for the Milestone Header
-                        if status == 'done':
-                            header_icon = "🟢"
-                        elif status == 'in progress':
-                            header_icon = "🟡"
-                        else:
-                            header_icon = "🔴"
-                            
-                        st.caption(f"Status: **{status.upper()}**")
-                        st.info(ms_data['description'])
-                        st.divider()
-                        
-                        st.markdown("#### Tasks")
-                        
-                        # 3. Task Loop with Checkbox Logic
-                        for t_idx, task in enumerate(ms_data.get("tasks", [])):
-                            # 1. Unique key for the widget
-                            task_status_key = f"status_{ms_data['id']}_{t_idx}"
-                            
-                            # 2. Source of Truth: Is it marked 'completed' in JSON?
-                            is_task_done_in_json = task.get("completed", False)
-                            
-                            # 3. Milestone Logic: If the whole milestone is 'done', force the visual check
-                            # Otherwise, use the individual task completion status
-                            status = ms_data.get('status', 'to do').lower()
-                            default_checked_value = True if status == 'done' else is_task_done_in_json
+    if st.session_state.show_right_panel:
 
-                            # 4. The Checkbox
-                            is_checked = st.checkbox(
-                                "Mark as complete", 
-                                value=default_checked_value,
-                                key=task_status_key,
-                                label_visibility="collapsed",
-                                disabled=(status == 'done') # Prevent unchecking if the milestone itself is marked 'done'
-                            )
-
-                            # 5. Persistence: Update JSON if user toggles an 'In Progress' task
-                            if status != 'done' and is_checked != is_task_done_in_json:
-                                ms_data["tasks"][t_idx]["completed"] = is_checked
-                                st.rerun()
-
-                            # 6. UI Rendering (Strikethrough logic)
-                            task_display_name = task['name']
-                            if is_checked:
-                                task_display_name = f"~~{task_display_name}~~"
-                                task_icon = "✅"
-                            else:
-                                task_icon = "🟡" if status == 'in progress' else "🔴"
-                            
-                            st.markdown(f"**{task_icon} {task_display_name}**")
-                            
-                            # Task Description
-                            task_desc = task.get('description', '')
-                            if is_checked and task_desc:
-                                st.caption(f"~~{task_desc}~~")
-                            else:
-                                st.caption(task_desc)
-
-                            # Resources
-                            col_res1, col_res2 = st.columns(2)
-                            if task.get('resources'): 
-                                col_res1.markdown(f"📚 [Read Resource]({task['resources']})")
-                            if task.get('youtube'): 
-                                col_res2.markdown(f"📺 [Watch Video]({task['youtube']})")
-                            
-                            st.write("")
-                        st.divider()
-                else:
-                    st.info("Select a milestone from the sidebar or graph to view details.")
-
-        # TAB 2: Roadmap Editor
-        with tabs[1]:
-            st.subheader("Edit Roadmap")
-            editor_chat_container = st.container(height=500)
-            with editor_chat_container:
-                if not st.session_state.editor_chat_history:
-                    st.markdown("""
-                    <div style="text-align: center; color: #94a3b8; margin-top: 40px;">
-                        <div style="font-size: 3rem; opacity: 0.8;">🛠️</div>
-                        <h3 style="color: #e2e8f0; margin: 10px 0;">Roadmap Manager</h3>
-                        <p>How would you like to adjust your plan?</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                for msg in st.session_state.editor_chat_history:
-                    with st.chat_message(msg["role"]):
-                        st.write(msg["content"])
+        with col2:
+            st.write("") 
+            st.write("") 
+            tabs = st.tabs(["📝 Details", "🛠️ Manager"])
             
-            editor_input = st.chat_input("Type instructions to modify plan...", key="editor_input")
-            if editor_input:
-                st.session_state.editor_chat_history.append({"role": "user", "content": editor_input})
-                with st.spinner("AI is updating your roadmap structure..."):
-                    state_update = PlanState(
-                        current_plan=st.session_state.plan_json,
-                        messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.editor_chat_history],
-                        user_request=user_goal,
-                        ui_selected_node=st.session_state.clicked_node,
-                        attempt_count=0, feedback=None, search_context="", raw_output="", error=None
-                    )
-                    result = editor_graph.invoke(state_update)
-                    if not result.get("error"):
-                        st.session_state.plan_json = result["current_plan"]
-                        st.session_state.editor_chat_history.append({"role": "ai", "content": "✅ Plan updated successfully!"})
-                        st.rerun()
+            # TAB 1: Milestone Details
+            with tabs[0]:
+                st.subheader("Milestone Details")
+                detail_container = st.container(height=650)
+                with detail_container:
+                    if st.session_state.clicked_node and st.session_state.plan_json:
+                        ms_data = next((m for m in st.session_state.plan_json.get("milestones", []) if m.get("id") == st.session_state.clicked_node), None)
+                        if ms_data:
+                            st.markdown(f"### {ms_data['title']}")
+                            
+                            # 1. Get and Format Status
+                            status = ms_data.get('status', 'to do').lower()
+                            is_milestone_done = (status == 'done')
+                            
+                            # 2. Assign Color/Icon for the Milestone Header
+                            if status == 'done':
+                                header_icon = "🟢"
+                            elif status == 'in progress':
+                                header_icon = "🟡"
+                            else:
+                                header_icon = "🔴"
+                                
+                            st.caption(f"Status: **{status.upper()}**")
+                            st.info(ms_data['description'])
+                            st.divider()
+                            
+                            st.markdown("#### Tasks")
+                            
+                            # 3. Task Loop with Checkbox Logic
+                            for t_idx, task in enumerate(ms_data.get("tasks", [])):
+                                # 1. Unique key for the widget
+                                task_status_key = f"status_{ms_data['id']}_{t_idx}"
+                                
+                                # 2. Source of Truth: Is it marked 'completed' in JSON?
+                                is_task_done_in_json = task.get("completed", False)
+                                
+                                # 3. Milestone Logic: If the whole milestone is 'done', force the visual check
+                                # Otherwise, use the individual task completion status
+                                status = ms_data.get('status', 'to do').lower()
+                                default_checked_value = True if status == 'done' else is_task_done_in_json
+
+                                # 4. The Checkbox
+                                is_checked = st.checkbox(
+                                    "Mark as complete", 
+                                    value=default_checked_value,
+                                    key=task_status_key,
+                                    label_visibility="collapsed",
+                                    disabled=(status == 'done') # Prevent unchecking if the milestone itself is marked 'done'
+                                )
+
+                                # 5. Persistence: Update JSON if user toggles an 'In Progress' task
+                                if status != 'done' and is_checked != is_task_done_in_json:
+                                    ms_data["tasks"][t_idx]["completed"] = is_checked
+                                    st.rerun()
+
+                                # 6. UI Rendering (Strikethrough logic)
+                                task_display_name = task['name']
+                                if is_checked:
+                                    task_display_name = f"~~{task_display_name}~~"
+                                    task_icon = "✅"
+                                else:
+                                    task_icon = "🟡" if status == 'in progress' else "🔴"
+                                
+                                st.markdown(f"**{task_icon} {task_display_name}**")
+                                
+                                # Task Description
+                                task_desc = task.get('description', '')
+                                if is_checked and task_desc:
+                                    st.caption(f"~~{task_desc}~~")
+                                else:
+                                    st.caption(task_desc)
+
+                                # Resources
+                                col_res1, col_res2 = st.columns(2)
+                                if task.get('resources'): 
+                                    col_res1.markdown(f"📚 [Read Resource]({task['resources']})")
+                                if task.get('youtube'): 
+                                    col_res2.markdown(f"📺 [Watch Video]({task['youtube']})")
+                                
+                                st.write("")
+                            st.divider()
                     else:
-                        st.error(f"Failed to update: {result.get('error')}")
+                        st.info("Select a milestone from the sidebar or graph to view details.")
+
+            # TAB 2: Roadmap Editor
+            with tabs[1]:
+                st.subheader("Edit Roadmap")
+                editor_chat_container = st.container(height=500)
+                with editor_chat_container:
+                    if not st.session_state.editor_chat_history:
+                        st.markdown("""
+                        <div style="text-align: center; color: #94a3b8; margin-top: 40px;">
+                            <div style="font-size: 3rem; opacity: 0.8;">🛠️</div>
+                            <h3 style="color: #e2e8f0; margin: 10px 0;">Roadmap Manager</h3>
+                            <p>How would you like to adjust your plan?</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    for msg in st.session_state.editor_chat_history:
+                        with st.chat_message(msg["role"]):
+                            st.write(msg["content"])
+                
+                editor_input = st.chat_input("Type instructions to modify plan...", key="editor_input")
+                if editor_input:
+                    st.session_state.editor_chat_history.append({"role": "user", "content": editor_input})
+                    with st.spinner("AI is updating your roadmap structure..."):
+                        state_update = PlanState(
+                            current_plan=st.session_state.plan_json,
+                            messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.editor_chat_history],
+                            user_request=user_goal,
+                            ui_selected_node=st.session_state.clicked_node,
+                            attempt_count=0, feedback=None, search_context="", raw_output="", error=None
+                        )
+                        result = editor_graph.invoke(state_update)
+                        if not result.get("error"):
+                            st.session_state.plan_json = result["current_plan"]
+                            st.session_state.editor_chat_history.append({"role": "ai", "content": "✅ Plan updated successfully!"})
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to update: {result.get('error')}")
 
 # =========================================================
 # === VIEW 2: QUIZ PAGE (Dedicated Full Screen) ===
