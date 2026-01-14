@@ -275,9 +275,8 @@ A core technical challenge was ensuring that when a user asks to "change my road
 
 ## 🎥 Media & Demo
 
-* **Demo Video**: *(Add demo link here)*
+* **Demo Video**: [![Watch the Demo Video](images/video_thumbnail.png)](https://drive.google.com/file/d/1z2sGzrw8PLx2DfMXWdKWcQLWseXAxikb/view?usp=sharing)
 * **Screenshots**:  
-
 
 
 ---
