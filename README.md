@@ -9,17 +9,269 @@
 * Explanation
 * Question Making
 
-## OverView
-![Alt text for screen readers](images/Overview_final.png "Optional title for mouseover")
-## Plan Pipeline
-![Alt text for screen readers](images/Plan.png "Optional title for mouseover")
-## Handwritten Note Gen Pipeline
-![Alt text for screen readers](images/Image_gen.png "Optional title for mouseover")
-## Video Gen Pipeline
-![Alt text for screen readers](images/Video_gen.png "Optional title for mouseover")
-## Orchestra Pipeline
-![Alt text for screen readers](images/Orchestra.png "Optional title for mouseover")
-## Quiz Pipeline
-![Alt text for screen readers](images/Quiz.png "Optional title for mouseover")
-## Research Pipeline
-![Alt text for screen readers](images/Research.png "Optional title for mouseover")
+
+# 📘 Study Buddy — Intelligent Learning Companion
+
+**Study Buddy** is an AI‑powered, interactive learning platform designed to help learners build structured roadmaps, deeply understand concepts, track progress, and receive personalized feedback throughout their learning journey. The system acts as a virtual AI tutor that adapts dynamically to the learner’s goals, strengths, and weaknesses.
+
+This project was developed as part of the **NTI Graduation Project** and demonstrates the integration of modern AI techniques such as **Retrieval‑Augmented Generation (RAG)**, **multi‑agent orchestration**, **OCR**, and **multimodal content generation** within a real, usable application.
+
+---
+
+## 📌 Table of Contents
+
+* [Project Overview](#-project-overview)
+* [Key Features](#-key-features)
+* [User Capabilities](#-user-capabilities)
+* [System Workflow](#-system-workflow)
+* [Technologies Used](#-technologies-used)
+* [Repository Structure](#-repository-structure)
+* [Installation & Setup](#-installation--setup)
+* [Usage Guide](#-usage-guide)
+* [Architecture & Pipelines](#-architecture--pipelines)
+* [Learned Lessons](#-learned-lessons)
+* [Media & Demo](#-media--demo)
+* [License](#-license)
+
+---
+
+## 🎯 Project Overview
+
+Study Buddy is designed to solve a common problem in self‑learning: **lack of structure, feedback, and personalization**. Instead of static courses or generic quizzes, the system dynamically builds a learning experience that evolves with the user.
+
+By combining large language models, vector databases, and intelligent agents, Study Buddy provides:
+
+* Structured learning paths
+* Concept‑level assessment
+* Adaptive quizzes
+* Continuous progress tracking
+* Personalized feedback and memory
+
+---
+
+## 🚀 Key Features
+
+### Personalized Learning Roadmaps
+
+* Generate **complete learning roadmaps** based on user preferences, goals, and background.
+* Roadmaps are divided into **clear milestones** and sub‑topics.
+* Each milestone is designed to ensure gradual and measurable progress.
+
+### Dynamic Roadmap Adjustment
+
+* Users can **modify any milestone** at any time.
+* The system automatically re‑balances the roadmap to keep learning coherent.
+* Supports changing timelines, topic depth, or learning focus.
+
+### Intelligent Quiz Generation
+
+* Generate quizzes with multiple formats:
+
+  * **Multiple Choice Questions (MCQ)**
+  * **Coding questions**
+  * **Article / explanation‑based questions**
+* Quizzes are generated based on:
+
+  * Roadmap milestones
+  * User performance history
+  * Uploaded documents
+
+### Advanced Feedback & Marking System
+
+* Grading focuses on **conceptual understanding**, not memorization.
+* Partial credit is awarded when reasoning shows understanding.
+* Each question includes:
+
+  * Given mark
+  * Explanation of correctness
+  * Reasoning when full marks are not achieved
+
+### Strength & Weakness Tracking
+
+* Automatically stores:
+
+  * User strong points
+  * User weak points
+* This data is reused to:
+
+  * Adjust future quizzes
+  * Emphasize weak concepts
+  * Recommend revision topics
+
+### Milestone Progress Evaluation
+
+* After each milestone:
+
+  * A quiz is generated automatically
+  * Understanding is validated before moving forward
+* Prevents knowledge gaps from accumulating.
+
+### Concept Explanation & Summarization
+
+* Users can ask for explanations or summaries of any concept.
+* The system:
+
+  * Searches the internet
+  * Retrieves relevant content
+  * Generates concise and clear explanations
+
+### 🎥 Educational Video Generation
+
+* Automatically generates **video explanations** for concepts.
+* Useful for visual learners and revision sessions.
+
+### 📝 Handwritten Notes Generation
+
+* Generates **handwritten‑style notes** for key topics.
+* Notes can be saved and reused as quick revision material.
+
+### Document Upload & Custom Learning
+
+* Users can upload:
+
+  * Text‑based documents
+  * Scanned images or PDFs
+* OCR is applied to extract content.
+* Uploaded content is used to:
+
+  * Generate quizzes
+  * Tailor explanations
+  * Build roadmap content
+
+### 🖥️ Interactive Application Interface
+
+* User‑friendly and intuitive interface.
+* Users can explore all features from a single application.
+* Real‑time feedback and visual progress tracking.
+
+---
+
+## 🔁 System Workflow
+
+1. User defines learning goal or uploads documents.
+2. System builds a personalized roadmap.
+3. Each milestone triggers learning content and quizzes.
+4. Performance is analyzed and stored.
+5. Future actions adapt based on user memory and progress.
+
+This workflow is orchestrated using **LangChain** and **LangGraph** to ensure modular and maintainable AI pipelines.
+
+---
+
+## 🧰 Technologies Used
+
+### AI & NLP
+
+* **LangChain** – LLM integration and chaining
+* **LangGraph** – Agent workflow orchestration
+* **RAG (Retrieval‑Augmented Generation)**
+* **Mini‑RAG Memory System** for personalization
+* **Diffusion Models** for visual content generation
+* **Text‑to‑Speech (TTS)** models
+
+### Data & Search
+
+* **FAISS Vector Database** for semantic retrieval
+* **OCR** for scanned and image‑based documents
+
+### Backend & Frontend
+
+* **FastAPI** – backend APIs
+* **Streamlit** – interactive UI
+* **Ngrok** – secure tunneling for deployment
+
+---
+
+## 📁 Repository Structure
+
+```
+NTI-Graduation-Project/
+│
+├── agents.py                # Core AI agents
+├── app.py                   # FastAPI application
+├── chat_graph.py            # LangGraph workflow
+├── orchestrator.py          # Agent orchestration logic
+├── quiz_agent.py            # Quiz generation and grading
+├── search_agent.py          # Internet & document search
+├── summarizer_agent.py      # Concept summarization
+├── generatingnotes.py       # Handwritten notes generation
+├── roadmap.json             # Roadmap structure
+├── schemas.py               # Data schemas
+├── tools.py                 # Shared tools and utilities
+└── config.py                # Configuration settings
+```
+
+---
+
+## 🛠 Installation & Setup
+
+### Prerequisites
+
+* Python 3.9+
+* Virtual environment (recommended)
+* API keys for LLM services
+
+### Steps
+
+```bash
+# Clone repository
+git clone https://github.com/ahgharib/NTI-Graduation-Project.git
+cd NTI-Graduation-Project
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run backend
+uvicorn app:app --reload
+
+# Run frontend
+streamlit run main.py
+```
+
+---
+
+## 📘 Usage Guide
+
+* **Create Roadmap**: Enter your learning goal and preferences.
+* **Follow Milestones**: Complete topics step‑by‑step.
+* **Take Quizzes**: Validate understanding after each milestone.
+* **Review Feedback**: Learn from detailed explanations.
+* **Upload Documents**: Customize learning using your own materials.
+
+---
+
+## Architecture & Pipelines
+
+The system consists of multiple AI pipelines:
+
+* Roadmap generation pipeline
+* Quiz creation and evaluation pipeline
+* RAG‑based explanation pipeline
+* Media and handwritten notes generation pipeline
+
+Architecture diagrams and flowcharts can be added to the `images/` directory.
+*![Alt text for screen readers](images/Overview_final.png "Optional title for mouseover")*
+
+---
+
+## 📚 Learned Lessons
+
+* RAG significantly improves factual accuracy and reliability.
+* Semantic grading is essential for meaningful assessment.
+* Modular agent design simplifies debugging and scaling.
+* Memory systems greatly enhance personalization.
+
+---
+
+## 🎥 Media & Demo
+
+* **Demo Video**: *(Add demo link here)*
+* **Screenshots**:  
+
+
+
+---
+
+## 📄 License
+
+This project is released under the **MIT License**.
