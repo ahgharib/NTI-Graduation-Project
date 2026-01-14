@@ -22,13 +22,12 @@ This project was developed as part of the **NTI Graduation Project** and demonst
 
 * [Project Overview](#-project-overview)
 * [Key Features](#-key-features)
-* [User Capabilities](#-user-capabilities)
 * [System Workflow](#-system-workflow)
 * [Technologies Used](#-technologies-used)
 * [Repository Structure](#-repository-structure)
 * [Installation & Setup](#-installation--setup)
 * [Usage Guide](#-usage-guide)
-* [Architecture & Pipelines](#-architecture--pipelines)
+* [System Architecture & Workflow](#-system-architecture--workflow)
 * [Learned Lessons](#-learned-lessons)
 * [Media & Demo](#-media--demo)
 * [License](#-license)
@@ -240,18 +239,29 @@ streamlit run main.py
 
 ---
 
-## Architecture & Pipelines
+## 🏗 System Architecture & Workflow
 
-The system consists of multiple AI pipelines:
+The system is built as a **Multi-Agent State Machine** using **LangGraph**. This allows for non-linear workflows where the AI can "loop back" to correct errors or ask for clarification.
 
-* Roadmap generation pipeline
-* Quiz creation and evaluation pipeline
-* RAG‑based explanation pipeline
-* Media and handwritten notes generation pipeline
+### 1. The Orchestrator
+The `orchestrator.py` acts as the central router. It analyzes the user's intent from the `chat_graph.py` state and determines which specialized agent to invoke. It manages the conversation history and ensures the "Global State" (user progress, memory, and roadmap) is passed correctly between nodes.
 
-Architecture diagrams and flowcharts can be added to the `images/` directory.
-*![Alt text for screen readers](images/Overview_final.png "Optional title for mouseover")*
+### 2. ReAct Agent Framework
+We utilize the **ReAct (Reasoning and Acting)** pattern across our agentic layers. 
+* **Reasoning:** Agents first generate a thought process about the task.
+* **Acting:** They execute specific tools (e.g., `tavily_search`, `OCR_tool`, `vector_store_retriever`).
+* This ensures the agents don't just "guess" but actually retrieve real-time data or process files before responding.
 
+### 3. Validator & Discriminator Logic (The Graph Updater)
+A core technical challenge was ensuring that when a user asks to "change my roadmap," the resulting JSON structure remains valid. In `chat_tools.py`, we implemented a **Validator/Discriminator** pattern:
+* **The Generator:** Proposes a modification to the `roadmap.json`.
+* **The Discriminator (Validator):** An internal logic gate that checks the proposal against a strict Pydantic schema. It ensures that the updated roadmap is logically sequenced (e.g., prerequisite topics come first) and syntactically correct.
+* **Refinement Loop:** If the Discriminator rejects the change, it provides feedback to the generator to fix the error before the state is ever saved to the database.
+
+  
+![Alt text for screen readers](images/Overview_final.png "Optional title for mouseover")
+
+#### more detailed images could be found at `/images` subdirectory
 ---
 
 ## 📚 Learned Lessons
