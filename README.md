@@ -1,15 +1,3 @@
-# NTI-Graduation-Project
-
-* Study Buddy
-* Lang Chain / Graph
-* Multi Agents
-* OCR
-* Facial Expression
-* YouTube and Web Search
-* Explanation
-* Question Making
-
-
 # 📘 Study Buddy — Intelligent Learning Companion
 
 **Study Buddy** is an AI‑powered, interactive learning platform designed to help learners build structured roadmaps, deeply understand concepts, track progress, and receive personalized feedback throughout their learning journey. The system acts as a virtual AI tutor that adapts dynamically to the learner’s goals, strengths, and weaknesses.
